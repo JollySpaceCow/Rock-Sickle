@@ -148,8 +148,20 @@ Starting from "Go" and following the perimeter clockwise:
 - Text: Black text, coloured text for special spaces, coloured text that represents the colour of each player
 
 ## Player Piece Visualization
-- Player pieces ("Pebble Bois") are semi-transparent to allow visibility of the square beneath
+- Player pieces (pebble bois) are semi-transparent to allow visibility of the square beneath
 - Multiple pieces on same square:
   - First piece centers on the square
   - Additional pieces overlap halfway off the square while still counting as being on that square
   - This allows all pieces to remain visible while maintaining their position status
+ 
+## Computer Players
+- There are easy, normal, and hard computer players
+- Computer players roll, answer quiz cards, and choose paths on their own
+- They are all represented with a cyborg pebble boi with a grey cap
+
+## UI Details
+- On startup, there are six player slots
+- When a player slot is clicked, it cycles through no player, human player, computer player
+- When a computer player is selected, there are three button options of easy, medium, and hard
+- The start the game button is only green and clickable if there is at least one player set.
+- The board...
