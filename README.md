@@ -11,7 +11,7 @@
 ## Board Layout
 Starting from "Go" and following the perimeter clockwise:
 
-## Board Spaces
+### Board Spaces
 - [Direction East] 1, 0, Q, -2, J, 1, B, 0, 0
 - [Direction South] J, 0, 1, -2, 1, -2, 0
 - [Direction West] B, 0, -2, Q, B, P
@@ -37,7 +37,8 @@ Starting from "Go" and following the perimeter clockwise:
 
 ## Game Rules
 1. Players roll a single die to move
-2. Landing spots effects:
+   
+3. Landing spots effects:
    - Forward 1: Move forward one space
    - Back 2 spaces: Move back two spaces
    - Safe space: No effect
@@ -45,15 +46,15 @@ Starting from "Go" and following the perimeter clockwise:
    - Bonus card (B): Draw Bonus card
    - Quiz card (Q): Draw Quiz card
 
-3. Jail Escape: Must roll an even number on turn to exit
+4. Jail Escape: Must roll an even number on turn to exit
 
-4. Quiz Cards:
+5. Quiz Cards:
    - Correct answer: Stay on space
    - Incorrect answer: Move back two spaces
 
-5. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
+6. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
 
-6. Turn ends once a player:
+7. Turn ends once a player:
    - Lands on a safe space
    - Answers a quiz card correctly
    - Escapes jail
@@ -78,27 +79,6 @@ Starting from "Go" and following the perimeter clockwise:
 14. Pick up a quiz card
 15. Pick up a quiz card
 
-### Quiz Cards (10)
-1. Q: What type of rock can you find fossils in?
-   A: Sedimentary
-2. Q: Is granite a metamorphic rock?
-   A: Negative
-3. Q: How are igneous rocks formed?
-   A: By magma cooling
-4. Q: What is molten rock called underground?
-   A: Magma
-5. Q: What rock contains lead?
-   A: Galena
-6. Q: What type of rock is formed by pressure and heat?
-   A: Metamorphic
-7. Q: Is air a rock?
-   A:
-8. Q: What are the 3 main types of rock?
-   A: Sedimentary, Igneous, Metamorphic
-9. Q: What is your favorite flavor of math, true or false?
-   A: Left
-10. Q: What type of rock is formed in layers?
-    A: Sedimentary
 ### Quiz Cards (10)
 1. Q: What type of rock can you find fossils in?
    A: Sedimentary
