@@ -12,14 +12,14 @@
 Starting from "Go" and following the perimeter clockwise:
 
 ## Board Spaces
-   [Direction East] 1, 0, Q, -2, J, 1, B, 0, 0
-   [Direction South] J, 0, 1, -2, 1, -2, 0
-[Direction West] B, 0, -2, Q, B, P
-(Path North) [Direction North] 0, 1
-(Path North) [Direction West] B, J, Q
-(Path North) [Direction North] -2, 0, F
-(Path West) [Direction West] 0, 1, J
-(Path West) [Direction North] -2, Q, -2, 0, F
+- [Direction East] 1, 0, Q, -2, J, 1, B, 0, 0
+- [Direction South] J, 0, 1, -2, 1, -2, 0
+- [Direction West] B, 0, -2, Q, B, P
+- (Path North) [Direction North] 0, 1
+- (Path North) [Direction West] B, J, Q
+- (Path North) [Direction North] -2, 0, F
+- (Path West) [Direction West] 0, 1, J
+- (Path West) [Direction North] -2, Q, -2, 0, F
 
 0 = Safe space
 1 = Jump one space
