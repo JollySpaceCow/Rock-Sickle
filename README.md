@@ -1,5 +1,4 @@
 # Rock-Sickle
-# Rock-Sickle Board Game Specifications
 
 ## Game Components
 - 1 six-sided die
