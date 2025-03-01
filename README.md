@@ -164,5 +164,6 @@ Starting from "Go" and following the perimeter clockwise:
 - On startup, there are six player slots
 - When a player slot is clicked, it cycles through no player, human player, computer player
 - When a computer player is selected, there are three button options of easy, medium, and hard
-- The start the game button is only green and clickable if there is at least one player set.
-- The board...
+- The start the game button is only green and clickable if there is at least one player set
+- A single clickable die is in the centre
+- It rolls with a drum roll and randomly jumps around the screen when the sound plays
