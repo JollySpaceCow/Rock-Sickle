@@ -2,22 +2,47 @@ import pygame
 import random
 import time
 import sys
-import os  # Add this import
+import os
+import traceback
+import logging
+
+# Set up logging to file for debugging
+logging.basicConfig(
+    filename=os.path.join(os.path.abspath(os.path.dirname(__file__)), "rock_sickle.log"),
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger()
+
+# Determine base path for assets (works in source and bundled app)
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.abspath(os.path.dirname(__file__))
+
+def load_asset(relative_path):
+    full_path = os.path.join(base_path, relative_path)
+    if not os.path.exists(full_path):
+        logger.error(f"Asset not found: {full_path}")
+        raise FileNotFoundError(f"Asset not found: {full_path}")
+    return full_path
 
 # Initialize Pygame
 pygame.init()
+logger.info("Pygame initialized successfully")
+
+# Set custom icon
+icon_path = load_asset("Assets/Images/Icons/RockSickle.png")
+icon_surface = pygame.image.load(icon_path)
+pygame.display.set_icon(icon_surface)
+logger.info(f"Custom icon set successfully: {icon_path}")
 
 # Original screen settings
 ORIGINAL_WIDTH, ORIGINAL_HEIGHT = 800, 600
 SCREEN_WIDTH, SCREEN_HEIGHT = ORIGINAL_WIDTH, ORIGINAL_HEIGHT
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Rock-Sickle")
-
-# Set the window icon (add these lines)
-icon_path = '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Icons/RockSickle.png'  # Change to PNG format
-if os.path.exists(icon_path):
-    icon = pygame.image.load(icon_path)
-    pygame.display.set_icon(icon)
+logger.info("Display initialized successfully")
 
 # Colors
 WHITE = (255, 255, 255)
@@ -32,98 +57,123 @@ GRAY = (128, 128, 128)
 PINK = (255, 192, 203)
 DARK_GREY = (64, 64, 64)
 
-# Load original images without scaling
-forward_one_original = pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Forward One.png')
-back_two_original = pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Back Two.png')
-
-tile_images_original = {
-    'Go': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Go.png'),
-    '1_East': forward_one_original,
-    '1_South': pygame.transform.rotate(forward_one_original, 90),
-    '1_West': pygame.transform.rotate(forward_one_original, 180),
-    '1_North': pygame.transform.rotate(forward_one_original, 270),
-    '-2_East': pygame.transform.rotate(back_two_original, 180),
-    '-2_South': pygame.transform.rotate(back_two_original, 270),
-    '-2_West': back_two_original,
-    '-2_North': pygame.transform.rotate(back_two_original, 90),
-    'B': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Bonus.png'),
-    'Q': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Quiz.png'),
-    'J': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Go To Jail.png'),
-    '0': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Safe Space.png'),
-    'P': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Choose Your Path.png'),
-    'F': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Finish.png'),
-    'Jail': pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Tiles/Jail Location.png'),
-}
-
-player_image_paths = [
-    '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player Red.png',
-    '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player Orange.png',
-    '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player Yellow.png',
-    '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player Green.png',
-    '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player Blue.png',
-    '/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player Purple.png',
-]
-player_images_original = [pygame.image.load(img) for img in player_image_paths]
-cpu_image_original = pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Players/Player CPU.png')
-
-dice_images_original = [
-    pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Dices/1.png'),
-    pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Dices/2.png'),
-    pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Dices/3.png'),
-    pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Dices/4.png'),
-    pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Dices/5.png'),
-    pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/Dices/6.png'),
-]
-
-# Load difficulty button images (not scaled initially)
-easy_button_image = pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/DifficultyButtons/1Baby.png')
-normal_button_image = pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/DifficultyButtons/3Consentrated.png')
-hard_button_image = pygame.image.load('/Users/harrison/Desktop/Rock_Sickle/Assets/Images/DifficultyButtons/4Angery.png')
-
-# Load Audio Assets with Error Handling
+# Load original image assets without scaling
 try:
-    roll_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Drum Roll (Roll the Dice).wav')
-    glug_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Glug (Moving).wav')
-    bonk_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Bonk (Stay In Jail).wav')
-    head_shake_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Head Shake (Exit Jail).wav')
-    whiz_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Whiz2 (Moving to Jail).wav')
-    drip_drop_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Drip Drop (Pick up Bonus Card).wav')
-    drum_machine_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Drum Machine (Pick up Quiz Card).wav')
-    win_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Odesong (Win).wav')
-    pop_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/pop (Anser Buttons Appear).wav')
-    bing_bong_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/bing_bong (Incorrect Quiz Answer).wav')
-    connect_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Connect.wav')
-    disconnect_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Disconnect (Put Card Away).wav')
-    indigogo_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/indigogo (Path Chosen).wav')
-    jump_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Jump (Forward a Space).wav')
-    mac_os_dinbg_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/mac_os_dinbg (Quiz Answer Correct).wav')
-    mac_os_uh_ohh_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/mac_os_uh_ohh (Sent to Jail by Bonus Card).wav')
-    super_mario_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/super_mario_64_soundtrack_correct_solution (Amount of Players has been Chosen).wav')
-    wobble_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Wobble (Back a Space).wav')
-    fairlin_round1_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/SE1_EVT_FAIRLIN_ROUND1 (Win).wav')
-    pong_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Pong (Player Not Set).wav')
-    voltage_easy_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Voltage (Easy CPU Player Selected).wav')
-    voltage_normal_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Voltage2 (Normal CPU Player Selected).wav')
-    voltage_hard_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Voltage3 (Hard CPU Player Selected).wav')
-    whit_sound = pygame.mixer.Sound('/Users/harrison/Desktop/Rock_Sickle/Assets/Audio/Whit (Player Set).wav')
-except pygame.error as e:
-    print(f"Error loading sound file: {e}")
+    forward_one_original = pygame.image.load(load_asset("Assets/Images/Tiles/Forward One.png"))
+    back_two_original = pygame.image.load(load_asset("Assets/Images/Tiles/Back Two.png"))
+    tile_images_original = {
+        'Go': pygame.image.load(load_asset("Assets/Images/Tiles/Go.png")),
+        '1_East': forward_one_original,
+        '1_South': pygame.transform.rotate(forward_one_original, 90),
+        '1_West': pygame.transform.rotate(forward_one_original, 180),
+        '1_North': pygame.transform.rotate(forward_one_original, 270),
+        '-2_East': pygame.transform.rotate(back_two_original, 180),
+        '-2_South': pygame.transform.rotate(back_two_original, 270),
+        '-2_West': back_two_original,
+        '-2_North': pygame.transform.rotate(back_two_original, 90),
+        'B': pygame.image.load(load_asset("Assets/Images/Tiles/Bonus.png")),
+        'Q': pygame.image.load(load_asset("Assets/Images/Tiles/Quiz.png")),
+        'J': pygame.image.load(load_asset("Assets/Images/Tiles/Go To Jail.png")),
+        '0': pygame.image.load(load_asset("Assets/Images/Tiles/Safe Space.png")),
+        'P': pygame.image.load(load_asset("Assets/Images/Tiles/Choose Your Path.png")),
+        'F': pygame.image.load(load_asset("Assets/Images/Tiles/Finish.png")),
+        'Jail': pygame.image.load(load_asset("Assets/Images/Tiles/Jail Location.png")),
+    }
+    logger.info("Original tile images loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading tile images: {e}")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
 
-# Font (initial size, will be scaled later)
+try:
+    player_image_paths = [
+        "Assets/Images/Players/Player Red.png",
+        "Assets/Images/Players/Player Orange.png",
+        "Assets/Images/Players/Player Yellow.png",
+        "Assets/Images/Players/Player Green.png",
+        "Assets/Images/Players/Player Blue.png",
+        "Assets/Images/Players/Player Purple.png",
+    ]
+    player_images_original = [pygame.image.load(load_asset(img)) for img in player_image_paths]
+    logger.info("Original player images loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading player images: {e}")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+
+try:
+    cpu_image_original = pygame.image.load(load_asset("Assets/Images/Players/Player CPU.png"))
+    logger.info("Original CPU image loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading CPU image: {e}")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+
+try:
+    dice_images_original = [
+        pygame.image.load(load_asset(f"Assets/Images/Dices/{i}.png")) for i in range(1, 7)
+    ]
+    logger.info("Original dice images loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading dice images: {e}")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+
+try:
+    easy_button_image = pygame.image.load(load_asset("Assets/Images/DifficultyButtons/1Baby.png"))
+    normal_button_image = pygame.image.load(load_asset("Assets/Images/DifficultyButtons/3Consentrated.png"))
+    hard_button_image = pygame.image.load(load_asset("Assets/Images/DifficultyButtons/4Angery.png"))
+    logger.info("Difficulty button images loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading difficulty button images: {e}")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+
+# Load audio assets (unchanged)
+try:
+    roll_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drum Roll (Roll the Dice).wav"))
+    glug_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Glug (Moving).wav"))
+    bonk_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Bonk (Stay In Jail).wav"))
+    head_shake_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Head Shake (Exit Jail).wav"))
+    whiz_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Whiz2 (Moving to Jail).wav"))
+    drip_drop_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drip Drop (Pick up Bonus Card).wav"))
+    drum_machine_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drum Machine (Pick up Quiz Card).wav"))
+    win_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Odesong (Win).wav"))
+    pop_sound = pygame.mixer.Sound(load_asset("Assets/Audio/pop (Anser Buttons Appear).wav"))
+    bing_bong_sound = pygame.mixer.Sound(load_asset("Assets/Audio/bing_bong (Incorrect Quiz Answer).wav"))
+    connect_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Connect.wav"))
+    disconnect_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Disconnect (Put Card Away).wav"))
+    indigogo_sound = pygame.mixer.Sound(load_asset("Assets/Audio/indigogo (Path Chosen).wav"))
+    jump_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Jump (Forward a Space).wav"))
+    mac_os_dinbg_sound = pygame.mixer.Sound(load_asset("Assets/Audio/mac_os_dinbg (Quiz Answer Correct).wav"))
+    mac_os_uh_ohh_sound = pygame.mixer.Sound(load_asset("Assets/Audio/mac_os_uh_ohh (Sent to Jail by Bonus Card).wav"))
+    super_mario_sound = pygame.mixer.Sound(load_asset("Assets/Audio/super_mario_64_soundtrack_correct_solution (Amount of Players has been Chosen).wav"))
+    wobble_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Wobble (Back a Space).wav"))
+    fairlin_round1_sound = pygame.mixer.Sound(load_asset("Assets/Audio/SE1_EVT_FAIRLIN_ROUND1 (Win).wav"))
+    pong_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Pong (Player Not Set).wav"))
+    voltage_easy_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage (Easy CPU Player Selected).wav"))
+    voltage_normal_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage2 (Normal CPU Player Selected).wav"))
+    voltage_hard_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage3 (Hard CPU Player Selected).wav"))
+    whit_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Whit (Player Set).wav"))
+    logger.info("Audio assets loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading audio assets: {e}")
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
+
+# Font
 font = pygame.font.SysFont(None, 24)
 
-# Board squares
+# Board squares and coordinates (unchanged)
 squares = [
     'Go', '1', '0', 'Q', '-2', 'J', '1', 'B', '0', '0',
-    'J', '0', '1', '-2', '1', '-2', '0',  # Positions 10-16: '0', '1', '-2', '1', '-2', '0'
+    'J', '0', '1', '-2', '1', '-2', '0',
     'B', '0', '-2', 'Q', 'B', 'P',
     '0', '1', 'B', 'J', 'Q', '-2', '0',
     '0', '1', 'J', '-2', 'Q', '-2', '0',
     'F'
 ]
-
 next_positions = list(range(1, 23)) + [[23, 30]] + list(range(24, 30)) + [37] + list(range(31, 37)) + [37] + [None]
-
 squares_coords = [
     (50, 50), (100, 50), (150, 50), (200, 50), (250, 50), (300, 50), (350, 50), (400, 50), (450, 50), (500, 50),
     (500, 100), (500, 150), (500, 200), (500, 250), (500, 300), (500, 350), (500, 400),
@@ -133,6 +183,7 @@ squares_coords = [
     (50, 130)
 ]
 
+# Quiz and bonus cards (unchanged)
 quiz_cards = [
     ("Which process turns sediment into rock?", ["Weathering", "Erosion", "Lithification"], 2),
     ("How are igneous rocks formed?", ["By layers of sediment building up", "When magma cools down", "From the Earth's crust", "When old rocks undergo intense pressure and heat"], 1),
@@ -151,12 +202,13 @@ bonus_cards = ["Move forward 2 spaces", "Go back 1 space", "Roll again", "Go to 
 random.shuffle(bonus_cards)
 bonus_card_index = 0
 
+# Player class (unchanged)
 class Player:
     def __init__(self, id, color_index, is_computer=False, difficulty=None):
         self.id = id
         self.color_index = color_index
         self.is_computer = is_computer
-        self.difficulty = difficulty  # None for humans, 'easy', 'normal', or 'hard' for CPUs
+        self.difficulty = difficulty
         self.position = 0
         self.in_jail = False
         self.finished = False
@@ -167,15 +219,16 @@ class Player:
         self.current_y = squares_coords[0][1]
         self.turn_ended = False
         self.position_history = []
-        self.active_animations = []  # Track active animations for this player
+        self.active_animations = []
 
+# Game functions (unchanged except for scale parameter usage)
 def roll_die(difficulty=None):
     if difficulty == 'easy':
-        return random.choice([1, 1, 2, 2, 3, 4])  # Biased towards lower rolls
+        return random.choice([1, 1, 2, 2, 3, 4])
     elif difficulty == 'hard':
-        return random.choice([3, 4, 5, 6, 6, 6])  # Biased towards higher rolls
-    else:  # Normal difficulty or human player
-        return random.randint(1, 6)  # Normal random roll
+        return random.choice([3, 4, 5, 6, 6, 6])
+    else:
+        return random.randint(1, 6)
 
 def interpolate_position(start_pos, end_pos, steps, current_step):
     start_x, start_y = start_pos
@@ -185,7 +238,7 @@ def interpolate_position(start_pos, end_pos, steps, current_step):
     return x, y
 
 def apply_effect(player, square_type, game_state, scale):
-    global bonus_card_index, quiz_card_index  # Declare globals to prevent UnboundLocalError
+    global bonus_card_index, quiz_card_index
     message = ""
     chain = False
     if square_type == '0':
@@ -206,8 +259,8 @@ def apply_effect(player, square_type, game_state, scale):
             }
             player.active_animations.append(anim)
             message = "Move forward 1 space."
-            chain = True  # Chain to next effect
-            player.turn_ended = False  # Only end turn after all effects
+            chain = True
+            player.turn_ended = False
         else:
             message = "Cannot move forward beyond board."
             player.turn_ended = True
@@ -234,8 +287,8 @@ def apply_effect(player, square_type, game_state, scale):
             }
             player.active_animations.append(anim)
             message = "Move back 2 spaces."
-            chain = True  # Chain to next effect
-            player.turn_ended = False  # Only end turn after all effects
+            chain = True
+            player.turn_ended = False
     elif square_type == 'B':
         if bonus_card_index < len(bonus_cards):
             bonus = bonus_cards[bonus_card_index]
@@ -316,7 +369,7 @@ def get_movement_path(start_pos, spaces, in_jail=False):
             break
         next_pos = next_positions[current_pos]
         if isinstance(next_pos, list):
-            path.append(current_pos)  # Stop at 'P' for path choice
+            path.append(current_pos)
             break
         else:
             current_pos = next_pos if next_pos is not None else current_pos
@@ -343,6 +396,9 @@ def apply_quiz_effect(player, correct, game_state, scale):
         game_state['message'] = "Correct! Turn ends."
         mac_os_dinbg_sound.play()
         player.turn_ended = True
+        game_state['quiz_state'] = 'shrinking'
+        game_state['quiz_shrink_start'] = time.time()
+        disconnect_sound.play()
     else:
         game_state['message'] = "Incorrect. Move back 2 spaces."
         bing_bong_sound.play()
@@ -371,7 +427,7 @@ def update_animation(game_state, scale):
     for player in game_state['players']:
         if player.active_animations:
             any_animations = True
-            anim = player.active_animations[0]  # Process the first animation in the queue
+            anim = player.active_animations[0]
             current_time = time.time()
             if current_time - anim['last_time'] >= anim['delay']:
                 if 'is_jail_move' in anim:
@@ -385,7 +441,7 @@ def update_animation(game_state, scale):
                         if anim['message'].startswith("Moving to jail") or anim['message'].startswith("Bonus card: Sent to jail"):
                             anim['player'].position = 10
                             anim['player'].in_jail = True
-                        elif anim['message'].startswith("Rolled"):  # Jail escape
+                        elif anim['message'].startswith("Rolled"):
                             anim['player'].position = anim['player'].prev_position
                         player.active_animations.pop(0)
                 else:
@@ -398,14 +454,12 @@ def update_animation(game_state, scale):
                         elif 'is_backwards' in anim and len(anim['player'].position_history) > 2:
                             anim['player'].position_history.pop()
                         anim['last_time'] = current_time
-                        # Play sound only when moving to a new position
-                        if anim['index'] > 0:  # Avoid playing sound on the initial position
-                            if 'is_backwards' in anim:
-                                wobble_sound.play()
-                            elif 'is_initial_move' in anim and anim['is_initial_move']:
-                                glug_sound.play()
-                            else:
-                                jump_sound.play()
+                        if 'is_initial_move' in anim and anim['is_initial_move']:
+                            glug_sound.play()
+                        elif 'is_backwards' in anim:
+                            wobble_sound.play()
+                        else:
+                            jump_sound.play()
                         game_state['message'] = anim['message'] + f" Moved to {squares[anim['player'].position]}."
                     else:
                         square_type = squares[anim['player'].position]
@@ -418,32 +472,7 @@ def update_animation(game_state, scale):
                             anim['player'].turn_ended = True
     return any_animations
 
-def scale_images(scale):
-    tile_images_scaled = {
-        key: pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale)))
-        for key, img in tile_images_original.items() if key != 'F'
-    }
-    scaled_finish = pygame.transform.smoothscale(tile_images_original['F'], (int(100 * scale), int(50 * scale)))
-    tile_images_scaled['F'] = pygame.transform.rotate(scaled_finish, 90)
-    
-    player_images_scaled = [pygame.transform.smoothscale(img, (int(40 * scale), int(40 * scale))) for img in player_images_original]
-    for img in player_images_scaled:
-        img.set_alpha(191)
-    
-    cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(40 * scale), int(40 * scale)))
-    cpu_image_scaled.set_alpha(191)
-    
-    dice_images_scaled = [pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale))) for img in dice_images_original]
-    
-    easy_button_scaled = pygame.transform.smoothscale(easy_button_image, (int(80 * scale), int(30 * scale)))
-    normal_button_scaled = pygame.transform.smoothscale(normal_button_image, (int(80 * scale), int(30 * scale)))
-    hard_button_scaled = pygame.transform.smoothscale(hard_button_image, (int(80 * scale), int(30 * scale)))
-    
-    return (tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled,
-            easy_button_scaled, normal_button_scaled, hard_button_scaled)
-
-def draw_board(players, game_state, scale, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled,
-               easy_button_scaled, normal_button_scaled, hard_button_scaled):
+def draw_board(players, game_state, scale, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled):
     global SCREEN_WIDTH
     screen.fill(GRAY)
     for i, square in enumerate(squares):
@@ -451,39 +480,32 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
         if square in ['Go', 'B', 'Q', 'J', '0', 'P', 'F']:
             img = tile_images_scaled[square]
         elif square == '1':
-            if i in [1, 6]:  # East
+            if i in [1, 6]:
                 img = tile_images_scaled['1_East']
-            elif i in [12, 14]:  # South
+            elif i in [12, 14]:
                 img = tile_images_scaled['1_North']
-            elif i == 24:  # North
+            elif i == 24:
                 img = tile_images_scaled['1_West']
-            elif i == 31:  # West
+            elif i == 31:
                 img = tile_images_scaled['1_West']
             else:
-                img = tile_images_scaled['1_East']  # Default fallback
+                img = tile_images_scaled['1_East']
         elif square == '-2':
-            if i == 4:  # East
+            if i == 4:
                 img = tile_images_scaled['-2_West']
-            elif i in [13, 15]:  # South
+            elif i in [13, 15]:
                 img = tile_images_scaled['-2_South']
-            elif i == 19:  # West
+            elif i == 19:
                 img = tile_images_scaled['-2_East']
-            elif i in [28, 33, 35]:  # North
+            elif i in [28, 33, 35]:
                 img = tile_images_scaled['-2_North']
             else:
-                img = tile_images_scaled['-2_West']  # Default fallback
+                img = tile_images_scaled['-2_West']
         screen.blit(img, (x - img.get_width() // 2, y - img.get_height() // 2))
 
     jail_x, jail_y = int(400 * scale), int(200 * scale)
     screen.blit(tile_images_scaled['Jail'], (jail_x - tile_images_scaled['Jail'].get_width() // 2, jail_y - tile_images_scaled['Jail'].get_height() // 2))
 
-    if 'last_scale' not in game_state or game_state['last_scale'] != scale:
-        player_images_scaled = [pygame.transform.smoothscale(img, (int(40 * scale), int(40 * scale))) for img in player_images_original]
-        for img in player_images_scaled:
-            img.set_alpha(191)
-        cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(40 * scale), int(40 * scale)))
-        cpu_image_scaled.set_alpha(191)
-        game_state['last_scale'] = scale
     for player in players:
         if not player.finished or player.position == len(squares) - 1:
             if player.in_jail:
@@ -516,7 +538,7 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
         text_rect = text.get_rect(center=rect.center)
         screen.blit(text, text_rect)
 
-    # Turn Indicator UI (moved above dev buttons)
+    # Turn Indicator UI
     current_id = game_state['current_player']
     next_id = (current_id + 1) % len(players)
     while players[next_id].finished and len(game_state['finish_order']) < len(players):
@@ -598,9 +620,6 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
             buttons.append((button, choice))
         game_state['path_buttons'] = buttons
 
-    if 'last_scale' not in game_state or game_state['last_scale'] != scale:
-        dice_images_scaled = [pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale))) for img in dice_images_original]
-        game_state['last_scale'] = scale
     dice_rect = pygame.Rect(int(350 * scale), int(250 * scale), int(50 * scale), int(50 * scale))
     if game_state.get('rolling_dice', False):
         current_player = players[game_state['current_player']]
@@ -625,7 +644,7 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
             roll = game_state['dice_roll']
             current_player.position_history.append(current_player.position)
             if current_player.in_jail:
-                if roll % 2 == 0:  # Normal jail escape rule
+                if roll % 2 == 0:
                     current_player.in_jail = False
                     anim = {
                         'player': current_player,
@@ -657,7 +676,7 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
                     'delay': 0.5
                 }
                 current_player.active_animations.append(anim)
-    elif 'final_dice_roll' in game_state:  # Updated to remove syntax warning
+    elif 'final_dice_roll' in game_state:
         dice_face = dice_images_scaled[game_state['final_dice_roll'] - 1]
         screen.blit(dice_face, dice_rect.topleft)
 
@@ -666,14 +685,19 @@ def select_players(scale):
     difficulties = [None, None, None, None, None, None]
     slot_rects = [pygame.Rect(int(100 * scale + i * 100 * scale), int(200 * scale), int(80 * scale), int(80 * scale)) for i in range(6)]
     difficulty_rects = [
-        [pygame.Rect(int(100 * scale + i * 100 * scale), int(300 * scale), int(80 * scale), int(30 * scale)),
-         pygame.Rect(int(100 * scale + i * 100 * scale), int(340 * scale), int(80 * scale), int(30 * scale)),
-         pygame.Rect(int(100 * scale + i * 100 * scale), int(380 * scale), int(80 * scale), int(30 * scale))]
+        [pygame.Rect(int(100 * scale + i * 100 * scale), int(300 * scale), int(80 * scale), int(80 * scale)),
+         pygame.Rect(int(100 * scale + i * 100 * scale), int(310 * scale), int(80 * scale), int(80 * scale)),
+         pygame.Rect(int(100 * scale + i * 100 * scale), int(320 * scale), int(80 * scale), int(80 * scale))]
         for i in range(6)
     ]
     start_button_rect = pygame.Rect(int(300 * scale), int(400 * scale), int(200 * scale), int(50 * scale))
 
-    _, player_images_scaled, cpu_image_scaled, _, easy_button_scaled, normal_button_scaled, hard_button_scaled = scale_images(scale)
+    player_images_scaled = [pygame.transform.smoothscale(img, (int(80 * scale), int(80 * scale))) for img in player_images_original]
+    cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(80 * scale), int(80 * scale)))
+    button_size = int(80 * scale)
+    easy_button_scaled = pygame.transform.smoothscale(easy_button_image, (button_size, button_size))
+    normal_button_scaled = pygame.transform.smoothscale(normal_button_image, (button_size, button_size))
+    hard_button_scaled = pygame.transform.smoothscale(hard_button_image, (button_size, button_size))
 
     while True:
         for event in pygame.event.get():
@@ -681,7 +705,7 @@ def select_players(scale):
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.VIDEORESIZE:
-                return None  # Exit and restart to handle resize
+                return None
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = event.pos
                 for i, rect in enumerate(slot_rects):
@@ -693,7 +717,7 @@ def select_players(scale):
                         elif player_states[i] == 1:
                             whit_sound.play()
                         elif player_states[i] == 2:
-                            if difficulties[i] is None:  # First switch to CPU
+                            if difficulties[i] is None:
                                 difficulties[i] = 'normal'
                                 voltage_normal_sound.play()
                             elif difficulties[i] == 'easy':
@@ -735,15 +759,15 @@ def select_players(scale):
             label = font.render(f"P{i+1}", True, BLACK)
             screen.blit(label, (rect.centerx - label.get_width() // 2, rect.top - int(20 * scale)))
 
-        for i, (easy_rect, med_rect, hard_rect) in enumerate(difficulty_rects):
+        for i, (easy_rect, normal_rect, hard_rect) in enumerate(difficulty_rects):
             if player_states[i] == 2:
                 screen.blit(easy_button_scaled, easy_rect.topleft)
-                screen.blit(normal_button_scaled, med_rect.topleft)
+                screen.blit(normal_button_scaled, normal_rect.topleft)
                 screen.blit(hard_button_scaled, hard_rect.topleft)
                 if difficulties[i] == 'easy':
                     pygame.draw.rect(screen, GREEN, easy_rect, 3)
                 elif difficulties[i] == 'normal':
-                    pygame.draw.rect(screen, YELLOW, med_rect, 3)
+                    pygame.draw.rect(screen, YELLOW, normal_rect, 3)
                 elif difficulties[i] == 'hard':
                     pygame.draw.rect(screen, RED, hard_rect, 3)
 
@@ -754,16 +778,16 @@ def select_players(scale):
         pygame.display.flip()
 
 def main():
-    global SCREEN_WIDTH, SCREEN_HEIGHT, font
+    global SCREEN_WIDTH
     scale = 1.0
     connect_sound.play()
     selected_players = select_players(scale)
-    while selected_players is None:  # Restart if window resized during player selection
+    while selected_players is None:
         selected_players = select_players(scale)
 
     players = [Player(i, color_idx, is_computer, difficulty) for i, (color_idx, is_computer, difficulty) in enumerate(selected_players)]
     for player in players:
-        player.position_history.append(player.position)  # Initial position in history
+        player.position_history.append(player.position)
     game_state = {
         'current_player': 0,
         'message': "",
@@ -772,18 +796,28 @@ def main():
         'rolling_dice': False,
         'dice_start_time': 0,
         'dice_roll': 0,
-        'final_dice_roll': 1,  # Start with die visible (face 1)
+        'final_dice_roll': 1,
         'pop_played': False,
         'quiz_state': None,
         'finish_order': [],
         'players': players,
-        'last_scale': scale  # Initialize last_scale to avoid rescaling on first draw
+        'last_scale': scale
     }
     clock = pygame.time.Clock()
 
     # Pre-scale images for initial draw
-    (tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled,
-     easy_button_scaled, normal_button_scaled, hard_button_scaled) = scale_images(scale)
+    tile_images_scaled = {
+        key: pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale)))
+        for key, img in tile_images_original.items() if key != 'F'
+    }
+    finish_rotated = pygame.transform.rotate(tile_images_original['F'], 90)
+    tile_images_scaled['F'] = pygame.transform.smoothscale(finish_rotated, (int(50 * scale), int(100 * scale)))  # Rotated, so width=50, height=100
+    player_images_scaled = [pygame.transform.smoothscale(img, (int(40 * scale), int(40 * scale))) for img in player_images_original]
+    for img in player_images_scaled:
+        img.set_alpha(191)
+    cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(40 * scale), int(40 * scale)))
+    cpu_image_scaled.set_alpha(191)
+    dice_images_scaled = [pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale))) for img in dice_images_original]
 
     running = True
     while running:
@@ -796,8 +830,18 @@ def main():
                 scale_y = SCREEN_HEIGHT / ORIGINAL_HEIGHT
                 scale = min(scale_x, scale_y)
                 font = pygame.font.SysFont(None, int(24 * scale))
-                (tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled,
-                 easy_button_scaled, normal_button_scaled, hard_button_scaled) = scale_images(scale)
+                tile_images_scaled = {
+                    key: pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale)))
+                    for key, img in tile_images_original.items() if key != 'F'
+                }
+                finish_rotated = pygame.transform.rotate(tile_images_original['F'], 90)
+                tile_images_scaled['F'] = pygame.transform.smoothscale(finish_rotated, (int(50 * scale), int(100 * scale)))
+                player_images_scaled = [pygame.transform.smoothscale(img, (int(40 * scale), int(40 * scale))) for img in player_images_original]
+                for img in player_images_scaled:
+                    img.set_alpha(191)
+                cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(40 * scale), int(40 * scale)))
+                cpu_image_scaled.set_alpha(191)
+                dice_images_scaled = [pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale))) for img in dice_images_original]
                 game_state['last_scale'] = scale
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = event.pos
@@ -845,6 +889,7 @@ def main():
                                 'delay': 0.5
                             }
                             current_player.active_animations.append(anim)
+                            jump_sound.play()
                     elif dev_buttons[2].collidepoint(pos):
                         if not current_player.finished and not current_player.in_jail:
                             current_player.prev_position = current_player.position
@@ -919,6 +964,7 @@ def main():
                                 'delay': 0.5
                             }
                             current_player.active_animations.append(anim)
+                            wobble_sound.play()
 
                 if game_state.get('show_quiz', False) and 'quiz_buttons' in game_state:
                     for button, option_index in game_state['quiz_buttons']:
@@ -946,7 +992,7 @@ def main():
                             }
                             player.active_animations.append(anim)
                             indigogo_sound.play()
-                            player.turn_ended = True  # Path choice ends turn
+                            player.turn_ended = True
                             game_state['show_path_choice'] = False
                             del game_state['path_buttons']
                             del game_state['pending_move']
@@ -963,7 +1009,7 @@ def main():
                         game_state['message'] = message
                     elif game_state.get('show_path_choice', False):
                         choices = game_state['pending_move']['choices']
-                        choice = random.choice(choices)  # Random path choice for CPU
+                        choice = random.choice(choices)
                         movement_path = [current_player.position, choice]
                         anim = {
                             'player': current_player,
@@ -984,7 +1030,7 @@ def main():
                             correct_prob = 0.2
                         elif current_player.difficulty == 'hard':
                             correct_prob = 0.8
-                        else:  # normal
+                        else:
                             correct_prob = 0.5
                         correct = random.random() < correct_prob
                         apply_quiz_effect(current_player, correct, game_state, scale)
@@ -1014,7 +1060,6 @@ def main():
                 while players[game_state['current_player']].finished and len(game_state['finish_order']) < len(players):
                     game_state['current_player'] = (game_state['current_player'] + 1) % len(players)
 
-        # Check for bonus delay and apply bonus action after 1.5 seconds
         if 'bonus_delay_start' in game_state and time.time() - game_state['bonus_delay_start'] >= 1.5:
             bonus = game_state['bonus_action']
             player = players[game_state['current_player']]
@@ -1048,7 +1093,7 @@ def main():
                 }
                 player.active_animations.append(anim)
             elif bonus == "Roll again":
-                player.has_rolled = False  # Allow another roll
+                player.has_rolled = False
                 game_state['message'] = "Bonus card: Roll again."
             elif bonus == "Go to jail":
                 player.prev_position = player.position
@@ -1068,8 +1113,7 @@ def main():
             del game_state['bonus_delay_start']
             del game_state['bonus_action']
 
-        draw_board(players, game_state, scale, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled,
-                   easy_button_scaled, normal_button_scaled, hard_button_scaled)
+        draw_board(players, game_state, scale, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled)
         pygame.display.flip()
         clock.tick(60)
 
