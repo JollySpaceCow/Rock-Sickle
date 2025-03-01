@@ -6,7 +6,7 @@ import os
 import traceback
 import logging
 
-# Set up logging to file for debugging
+# Set up logging
 logging.basicConfig(
     filename=os.path.join(os.path.abspath(os.path.dirname(__file__)), "rock_sickle.log"),
     level=logging.DEBUG,
@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 
-# Determine base path for assets (works in source and bundled app)
+# Determine base path for assets
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
 else:
@@ -37,7 +37,7 @@ icon_surface = pygame.image.load(icon_path)
 pygame.display.set_icon(icon_surface)
 logger.info(f"Custom icon set successfully: {icon_path}")
 
-# Original screen settings
+# Screen settings
 ORIGINAL_WIDTH, ORIGINAL_HEIGHT = 800, 600
 SCREEN_WIDTH, SCREEN_HEIGHT = ORIGINAL_WIDTH, ORIGINAL_HEIGHT
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
@@ -56,8 +56,9 @@ PURPLE = (128, 0, 128)
 GRAY = (128, 128, 128)
 PINK = (255, 192, 203)
 DARK_GREY = (64, 64, 64)
+player_colors = [RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE]
 
-# Load original image assets without scaling
+# Load original image assets
 try:
     forward_one_original = pygame.image.load(load_asset("Assets/Images/Tiles/Forward One.png"))
     back_two_original = pygame.image.load(load_asset("Assets/Images/Tiles/Back Two.png"))
@@ -119,17 +120,20 @@ except Exception as e:
     traceback.print_exc(file=sys.stderr)
     sys.exit(1)
 
+# Load difficulty images
 try:
-    easy_button_image = pygame.image.load(load_asset("Assets/Images/DifficultyButtons/1Baby.png"))
-    normal_button_image = pygame.image.load(load_asset("Assets/Images/DifficultyButtons/3Consentrated.png"))
-    hard_button_image = pygame.image.load(load_asset("Assets/Images/DifficultyButtons/4Angery.png"))
-    logger.info("Difficulty button images loaded successfully")
+    difficulty_images_original = {
+        'easy': pygame.image.load(load_asset("Assets/Images/DifficultyButtons/1Baby.png")),
+        'normal': pygame.image.load(load_asset("Assets/Images/DifficultyButtons/3Consentrated.png")),
+        'hard': pygame.image.load(load_asset("Assets/Images/DifficultyButtons/4Angery.png")),
+    }
+    logger.info("Original difficulty images loaded successfully")
 except Exception as e:
-    logger.error(f"Error loading difficulty button images: {e}")
+    logger.error(f"Error loading difficulty images: {e}")
     traceback.print_exc(file=sys.stderr)
     sys.exit(1)
 
-# Load audio assets (unchanged)
+# Load audio assets
 try:
     roll_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drum Roll (Roll the Dice).wav"))
     glug_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Glug (Moving).wav"))
@@ -164,7 +168,7 @@ except Exception as e:
 # Font
 font = pygame.font.SysFont(None, 24)
 
-# Board squares and coordinates (unchanged)
+# Board squares and coordinates
 squares = [
     'Go', '1', '0', 'Q', '-2', 'J', '1', 'B', '0', '0',
     'J', '0', '1', '-2', '1', '-2', '0',
@@ -183,7 +187,7 @@ squares_coords = [
     (50, 130)
 ]
 
-# Quiz and bonus cards (unchanged)
+# Quiz and bonus cards
 quiz_cards = [
     ("Which process turns sediment into rock?", ["Weathering", "Erosion", "Lithification"], 2),
     ("How are igneous rocks formed?", ["By layers of sediment building up", "When magma cools down", "From the Earth's crust", "When old rocks undergo intense pressure and heat"], 1),
@@ -202,7 +206,6 @@ bonus_cards = ["Move forward 2 spaces", "Go back 1 space", "Roll again", "Go to 
 random.shuffle(bonus_cards)
 bonus_card_index = 0
 
-# Player class (unchanged)
 class Player:
     def __init__(self, id, color_index, is_computer=False, difficulty=None):
         self.id = id
@@ -221,7 +224,6 @@ class Player:
         self.position_history = []
         self.active_animations = []
 
-# Game functions (unchanged except for scale parameter usage)
 def roll_die(difficulty=None):
     if difficulty == 'easy':
         return random.choice([1, 1, 2, 2, 3, 4])
@@ -242,7 +244,7 @@ def apply_effect(player, square_type, game_state, scale):
     message = ""
     chain = False
     if square_type == '0':
-        message = "Safe space. Turn ends."
+        message = f"Player {player.id + 1} on safe space. Turn ends."
         player.turn_ended = True
     elif square_type == '1':
         if player.position + 1 < len(squares):
@@ -258,15 +260,15 @@ def apply_effect(player, square_type, game_state, scale):
                 'delay': 0.5
             }
             player.active_animations.append(anim)
-            message = "Move forward 1 space."
+            message = f"Player {player.id + 1} moves forward 1 space."
             chain = True
             player.turn_ended = False
         else:
-            message = "Cannot move forward beyond board."
+            message = f"Player {player.id + 1} cannot move forward beyond board."
             player.turn_ended = True
     elif square_type == '-2':
         if player.position == 0 or len(player.position_history) < 2:
-            message = "Cannot move back from start or insufficient history."
+            message = f"Player {player.id + 1} cannot move back from start or insufficient history."
             player.turn_ended = True
         else:
             num_back = 2
@@ -286,7 +288,7 @@ def apply_effect(player, square_type, game_state, scale):
                 'delay': 0.5
             }
             player.active_animations.append(anim)
-            message = "Move back 2 spaces."
+            message = f"Player {player.id + 1} moves back 2 spaces."
             chain = True
             player.turn_ended = False
     elif square_type == 'B':
@@ -296,10 +298,10 @@ def apply_effect(player, square_type, game_state, scale):
             drip_drop_sound.play()
             game_state['bonus_delay_start'] = time.time()
             game_state['bonus_action'] = bonus
-            message = f"Bonus card: {bonus}. Action will be applied in 1.5 seconds."
+            message = f"Player {player.id + 1} picks bonus card: {bonus}. Action will be applied in 1.5 seconds."
             player.turn_ended = True
         else:
-            message = "No more bonus cards."
+            message = f"Player {player.id + 1} has no more bonus cards."
             player.turn_ended = True
     elif square_type == 'Q':
         if quiz_card_index < len(quiz_cards):
@@ -311,9 +313,9 @@ def apply_effect(player, square_type, game_state, scale):
             game_state['pop_played'] = False
             drum_machine_sound.play()
             quiz_card_index = (quiz_card_index + 1) % len(quiz_cards)
-            message = "Answer the quiz question."
+            message = f"Player {player.id + 1} must answer the quiz question."
         else:
-            message = "No more quiz cards."
+            message = f"Player {player.id + 1} has no more quiz cards."
         player.turn_ended = True
     elif square_type == 'J':
         player.prev_position = player.position
@@ -327,21 +329,21 @@ def apply_effect(player, square_type, game_state, scale):
             'last_time': time.time(),
             'message': "Moving to jail.",
             'is_jail_move': True,
-            'delay': 0.05
+            'delay': 0.5
         }
         player.active_animations.append(anim)
-        message = "Moving to jail. Roll even to escape on next turn."
+        message = f"Player {player.id + 1} moving to jail. Roll even to escape on next turn."
         player.turn_ended = True
     elif square_type == 'P':
         game_state['show_path_choice'] = True
         game_state['pending_move'] = {'player': player, 'choices': next_positions[player.position]}
-        message = "Choose your path."
+        message = f"Player {player.id + 1} chooses path."
         player.turn_ended = True
     elif square_type == 'F':
         player.finished = True
         player.position = len(squares) - 1
         win_sound.play()
-        message = "Player finished!"
+        message = f"Player {player.id + 1} finished!"
         player.turn_ended = True
         if game_state.get('finish_order') is None:
             game_state['finish_order'] = []
@@ -354,7 +356,7 @@ def apply_effect(player, square_type, game_state, scale):
                 fin_player.current_x = scaled_x(idx)
                 fin_player.current_y = scaled_y(idx)
     elif square_type == 'Go':
-        message = "Start position."
+        message = f"Player {player.id + 1} at start position."
         player.turn_ended = True
     return message, chain
 
@@ -393,14 +395,14 @@ def move_player(player, game_state, roll=None):
 
 def apply_quiz_effect(player, correct, game_state, scale):
     if correct:
-        game_state['message'] = "Correct! Turn ends."
+        game_state['message'] = f"Player {player.id + 1} answered correctly! Turn ends."
         mac_os_dinbg_sound.play()
         player.turn_ended = True
         game_state['quiz_state'] = 'shrinking'
         game_state['quiz_shrink_start'] = time.time()
         disconnect_sound.play()
     else:
-        game_state['message'] = "Incorrect. Move back 2 spaces."
+        game_state['message'] = f"Player {player.id + 1} answered incorrectly. Moving back 2 spaces."
         bing_bong_sound.play()
         if len(player.position_history) > 2:
             target_pos = player.position_history[-3]
@@ -472,6 +474,62 @@ def update_animation(game_state, scale):
                             anim['player'].turn_ended = True
     return any_animations
 
+def render_player_text(screen, font, prefix, player, y, scale, player_colors):
+    prefix_surface = font.render(prefix, True, BLACK)
+    player_text = font.render("Player ", True, BLACK)
+    number_text = font.render(str(player.id + 1), True, player_colors[player.color_index])
+    cpu_text = font.render(" (CPU)", True, BLACK) if player.is_computer else None
+
+    x = int(600 * scale)
+    screen.blit(prefix_surface, (x, y))
+    x += prefix_surface.get_width()
+    screen.blit(player_text, (x, y))
+    x += player_text.get_width()
+    screen.blit(number_text, (x, y))
+    if cpu_text:
+        x += number_text.get_width()
+        screen.blit(cpu_text, (x, y))
+
+def render_colored_message(screen, font, message, x, y, players, player_colors):
+    parts = message.split("Player ", 1)
+    if len(parts) == 1:
+        text_surface = font.render(message, True, BLACK)
+        screen.blit(text_surface, (x, y))
+    else:
+        prefix = parts[0]
+        rest = parts[1]
+        player_num_str = ""
+        i = 0
+        while i < len(rest) and rest[i].isdigit():
+            player_num_str += rest[i]
+            i += 1
+        player_id = int(player_num_str) - 1 if player_num_str else -1
+        remainder = rest[i:] if i < len(rest) else ""
+
+        current_x = x
+        if prefix:
+            prefix_surface = font.render(prefix, True, BLACK)
+            screen.blit(prefix_surface, (current_x, y))
+            current_x += prefix_surface.get_width()
+        
+        player_text = font.render("Player ", True, BLACK)
+        screen.blit(player_text, (current_x, y))
+        current_x += player_text.get_width()
+
+        if 0 <= player_id < len(players):
+            number_color = player_colors[players[player_id].color_index]
+            number_surface = font.render(player_num_str, True, number_color)
+            screen.blit(number_surface, (current_x, y))
+            current_x += number_surface.get_width()
+        else:
+            number_surface = font.render(player_num_str, True, BLACK)
+            screen.blit(number_surface, (current_x, y))
+            current_x += number_surface.get_width()
+
+        if remainder:
+            remainder_surface = font.render(remainder, True, BLACK)
+            screen.blit(remainder_surface, (current_x, y))
+
 def draw_board(players, game_state, scale, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled):
     global SCREEN_WIDTH
     screen.fill(GRAY)
@@ -539,24 +597,17 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
         screen.blit(text, text_rect)
 
     # Turn Indicator UI
-    current_id = game_state['current_player']
-    next_id = (current_id + 1) % len(players)
-    while players[next_id].finished and len(game_state['finish_order']) < len(players):
+    current_player = players[game_state['current_player']]
+    next_id = (game_state['current_player'] + 1) % len(players)
+    while next_id < len(players) and players[next_id].finished and len(game_state['finish_order']) < len(players):
         next_id = (next_id + 1) % len(players)
-    current_text = f"Current Turn: Player {current_id + 1}"
-    if players[current_id].is_computer:
-        current_text += " (CPU)"
-    next_text = f"Next Turn: Player {next_id + 1}"
-    if players[next_id].is_computer:
-        next_text += " (CPU)"
-    current_surface = font.render(current_text, True, BLACK)
-    next_surface = font.render(next_text, True, BLACK)
-    screen.blit(current_surface, (SCREEN_WIDTH // 2 - current_surface.get_width() // 2, int(100 * scale)))
-    screen.blit(next_surface, (SCREEN_WIDTH // 2 - next_surface.get_width() // 2, int(130 * scale)))
+    if next_id < len(players):
+        next_player = players[next_id]
+        render_player_text(screen, font, "Current Turn: ", current_player, int(50 * scale), scale, player_colors)
+        render_player_text(screen, font, "Next Turn: ", next_player, int(80 * scale), scale, player_colors)
 
     if 'message' in game_state:
-        text = font.render(game_state['message'], True, BLACK)
-        screen.blit(text, (int(50 * scale), int(500 * scale)))
+        render_colored_message(screen, font, game_state['message'], int(50 * scale), int(500 * scale), players, player_colors)
 
     if game_state.get('show_quiz', False) and game_state.get('quiz_question'):
         current_time = time.time()
@@ -653,7 +704,7 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
                         'steps': 20,
                         'current_step': 0,
                         'last_time': time.time(),
-                        'message': f"Rolled {roll} (even). Escaping jail.",
+                        'message': f"Player {current_player.id + 1} rolled {roll} (even). Escaping jail.",
                         'is_jail_move': True,
                         'delay': 0.05
                     }
@@ -662,7 +713,7 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
                     current_player.turn_ended = True
                 else:
                     bonk_sound.play()
-                    game_state['message'] = f"Rolled {roll} (odd). Still in jail."
+                    game_state['message'] = f"Player {current_player.id + 1} rolled {roll} (odd). Still in jail."
                     current_player.turn_ended = True
             else:
                 movement_path = get_movement_path(current_player.position, roll)
@@ -671,7 +722,7 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
                     'path': movement_path,
                     'index': 0,
                     'last_time': time.time(),
-                    'message': f"Rolled {roll}. Moving {roll} spaces.",
+                    'message': f"Player {current_player.id + 1} rolled {roll}. Moving {roll} spaces.",
                     'is_initial_move': True,
                     'delay': 0.5
                 }
@@ -680,97 +731,112 @@ def draw_board(players, game_state, scale, tile_images_scaled, player_images_sca
         dice_face = dice_images_scaled[game_state['final_dice_roll'] - 1]
         screen.blit(dice_face, dice_rect.topleft)
 
+def toggle_player_state(index, player_states, difficulties):
+    """Toggle the player slot state: 0 (Not Set) → 1 (Human) → 2 (CPU) → 0."""
+    player_states[index] = (player_states[index] + 1) % 3
+    if player_states[index] == 0:
+        pong_sound.play()
+        difficulties[index] = None
+    elif player_states[index] == 1:
+        whit_sound.play()
+        difficulties[index] = None
+    elif player_states[index] == 2:
+        difficulties[index] = 'normal'  # Default to Normal for CPU
+        voltage_normal_sound.play()
+
+def cycle_difficulty(index, difficulties):
+    """Cycle CPU difficulty: Easy → Normal → Hard → Easy."""
+    if difficulties[index] == 'easy':
+        difficulties[index] = 'normal'
+        voltage_normal_sound.play()
+    elif difficulties[index] == 'normal':
+        difficulties[index] = 'hard'
+        voltage_hard_sound.play()
+    elif difficulties[index] == 'hard':
+        difficulties[index] = 'easy'
+        voltage_easy_sound.play()
+
 def select_players(scale):
-    player_states = [1, 0, 0, 0, 0, 0]
+    # Initialize player states and difficulties
+    player_states = [1, 0, 0, 0, 0, 0]  # P1 starts as Human, others Not Set
     difficulties = [None, None, None, None, None, None]
+    
+    # Define slot and button rectangles
     slot_rects = [pygame.Rect(int(100 * scale + i * 100 * scale), int(200 * scale), int(80 * scale), int(80 * scale)) for i in range(6)]
-    difficulty_rects = [
-        [pygame.Rect(int(100 * scale + i * 100 * scale), int(300 * scale), int(80 * scale), int(80 * scale)),
-         pygame.Rect(int(100 * scale + i * 100 * scale), int(310 * scale), int(80 * scale), int(80 * scale)),
-         pygame.Rect(int(100 * scale + i * 100 * scale), int(320 * scale), int(80 * scale), int(80 * scale))]
-        for i in range(6)
-    ]
     start_button_rect = pygame.Rect(int(300 * scale), int(400 * scale), int(200 * scale), int(50 * scale))
 
+    # Load and scale images
     player_images_scaled = [pygame.transform.smoothscale(img, (int(80 * scale), int(80 * scale))) for img in player_images_original]
     cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(80 * scale), int(80 * scale)))
-    button_size = int(80 * scale)
-    easy_button_scaled = pygame.transform.smoothscale(easy_button_image, (button_size, button_size))
-    normal_button_scaled = pygame.transform.smoothscale(normal_button_image, (button_size, button_size))
-    hard_button_scaled = pygame.transform.smoothscale(hard_button_image, (button_size, button_size))
+    not_set_image = pygame.image.load(load_asset("Assets/Images/Players/Player Not.png"))
+    not_set_image_scaled = pygame.transform.smoothscale(not_set_image, (int(80 * scale), int(80 * scale)))
+    difficulty_images_scaled = {
+        key: pygame.transform.smoothscale(img, (int(30 * scale), int(30 * scale)))
+        for key, img in difficulty_images_original.items()
+    }
 
     while True:
+        # Calculate difficulty rectangles for CPU slots
+        difficulty_rects = []
+        for i, state in enumerate(player_states):
+            if state == 2:
+                slot_rect = slot_rects[i]
+                diff_x = int(slot_rect.centerx - 15 * scale)  # Center horizontally (30/2 = 15)
+                diff_y = int(290 * scale)  # Below the slot
+                diff_rect = pygame.Rect(diff_x, diff_y, int(30 * scale), int(30 * scale))
+                difficulty_rects.append((i, diff_rect))
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.VIDEORESIZE:
-                return None
+                return None  # Restart with new scale on resize
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = event.pos
-                for i, rect in enumerate(slot_rects):
-                    if rect.collidepoint(pos) and event.button == 1:
-                        old_state = player_states[i]
-                        player_states[i] = (player_states[i] + 1) % 3
-                        if player_states[i] == 0:
-                            pong_sound.play()
-                        elif player_states[i] == 1:
-                            whit_sound.play()
-                        elif player_states[i] == 2:
-                            if difficulties[i] is None:
-                                difficulties[i] = 'normal'
-                                voltage_normal_sound.play()
-                            elif difficulties[i] == 'easy':
-                                voltage_easy_sound.play()
-                            elif difficulties[i] == 'normal':
-                                voltage_normal_sound.play()
-                            elif difficulties[i] == 'hard':
-                                voltage_hard_sound.play()
-                for i, (easy, med, hard) in enumerate(difficulty_rects):
-                    if player_states[i] == 2:
-                        if easy.collidepoint(pos) and event.button == 3:
-                            difficulties[i] = 'easy'
-                            voltage_easy_sound.play()
-                        elif med.collidepoint(pos) and event.button == 3:
-                            difficulties[i] = 'normal'
-                            voltage_normal_sound.play()
-                        elif hard.collidepoint(pos) and event.button == 3:
-                            difficulties[i] = 'hard'
-                            voltage_hard_sound.play()
+                if event.button == 1:  # Left-click to toggle state
+                    for i, rect in enumerate(slot_rects):
+                        if rect.collidepoint(pos):
+                            toggle_player_state(i, player_states, difficulties)
+                elif event.button == 3:  # Right-click to cycle difficulty
+                    for i, diff_rect in difficulty_rects:
+                        if diff_rect.collidepoint(pos):
+                            cycle_difficulty(i, difficulties)
+                            break
                 if start_button_rect.collidepoint(pos) and any(state > 0 for state in player_states):
                     selected_players = []
                     for i, state in enumerate(player_states):
                         if state == 1:
-                            selected_players.append((i, False, None))
+                            selected_players.append((i, False, None))  # Human
                         elif state == 2:
-                            selected_players.append((i, True, difficulties[i]))
+                            selected_players.append((i, True, difficulties[i]))  # CPU
                     super_mario_sound.play()
                     return selected_players
+            elif event.type == pygame.KEYDOWN:
+                if event.key >= pygame.K_1 and event.key <= pygame.K_6:
+                    index = event.key - pygame.K_1
+                    if index < len(player_states):
+                        toggle_player_state(index, player_states, difficulties)
 
+        # Draw the selection screen
         screen.fill(GRAY)
         for i, (rect, state) in enumerate(zip(slot_rects, player_states)):
             if state == 0:
-                text = font.render("Not Set", True, BLACK)
-                screen.blit(text, text.get_rect(center=rect.center))
+                screen.blit(not_set_image_scaled, rect.topleft)
             elif state == 1:
                 screen.blit(player_images_scaled[i], rect.topleft)
             elif state == 2:
                 screen.blit(cpu_image_scaled, rect.topleft)
+                if difficulties[i]:
+                    diff_img = difficulty_images_scaled[difficulties[i]]
+                    for slot_i, diff_rect in difficulty_rects:
+                        if slot_i == i:
+                            screen.blit(diff_img, diff_rect.topleft)
+                            break
             label = font.render(f"P{i+1}", True, BLACK)
             screen.blit(label, (rect.centerx - label.get_width() // 2, rect.top - int(20 * scale)))
 
-        for i, (easy_rect, normal_rect, hard_rect) in enumerate(difficulty_rects):
-            if player_states[i] == 2:
-                screen.blit(easy_button_scaled, easy_rect.topleft)
-                screen.blit(normal_button_scaled, normal_rect.topleft)
-                screen.blit(hard_button_scaled, hard_rect.topleft)
-                if difficulties[i] == 'easy':
-                    pygame.draw.rect(screen, GREEN, easy_rect, 3)
-                elif difficulties[i] == 'normal':
-                    pygame.draw.rect(screen, YELLOW, normal_rect, 3)
-                elif difficulties[i] == 'hard':
-                    pygame.draw.rect(screen, RED, hard_rect, 3)
-
+        # Draw Start button
         pygame.draw.rect(screen, GREEN if any(state > 0 for state in player_states) else GRAY, start_button_rect)
         text = font.render("Start Game", True, BLACK)
         screen.blit(text, text.get_rect(center=start_button_rect.center))
@@ -805,13 +871,13 @@ def main():
     }
     clock = pygame.time.Clock()
 
-    # Pre-scale images for initial draw
+    # Pre-scale images
     tile_images_scaled = {
         key: pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale)))
         for key, img in tile_images_original.items() if key != 'F'
     }
     finish_rotated = pygame.transform.rotate(tile_images_original['F'], 90)
-    tile_images_scaled['F'] = pygame.transform.smoothscale(finish_rotated, (int(50 * scale), int(100 * scale)))  # Rotated, so width=50, height=100
+    tile_images_scaled['F'] = pygame.transform.smoothscale(finish_rotated, (int(50 * scale), int(100 * scale)))
     player_images_scaled = [pygame.transform.smoothscale(img, (int(40 * scale), int(40 * scale))) for img in player_images_original]
     for img in player_images_scaled:
         img.set_alpha(191)
@@ -1075,7 +1141,7 @@ def main():
                     'path': movement_path,
                     'index': 0,
                     'last_time': time.time(),
-                    'message': "Moving back 1 space from bonus card.",
+                    'message': f"Player {player.id + 1} moving back 1 space from bonus card.",
                     'is_backwards': True,
                     'delay': 0.5
                 }
@@ -1087,14 +1153,14 @@ def main():
                     'path': movement_path,
                     'index': 0,
                     'last_time': time.time(),
-                    'message': "Moving forward 2 spaces from bonus card.",
+                    'message': f"Player {player.id + 1} moving forward 2 spaces from bonus card.",
                     'is_initial_move': False,
                     'delay': 0.5
                 }
                 player.active_animations.append(anim)
             elif bonus == "Roll again":
                 player.has_rolled = False
-                game_state['message'] = "Bonus card: Roll again."
+                game_state['message'] = f"Player {player.id + 1} gets bonus card: Roll again."
             elif bonus == "Go to jail":
                 player.prev_position = player.position
                 anim = {
@@ -1104,7 +1170,7 @@ def main():
                     'steps': 20,
                     'current_step': 0,
                     'last_time': time.time(),
-                    'message': "Bonus card: Sent to jail.",
+                    'message': f"Player {player.id + 1} sent to jail by bonus card.",
                     'is_jail_move': True,
                     'delay': 0.05
                 }
