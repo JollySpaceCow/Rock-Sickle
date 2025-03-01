@@ -11,59 +11,32 @@
 ## Board Layout
 Starting from "Go" and following the perimeter clockwise:
 
-### First Side
-1. Go (Start)
-2. Forward 1
-3. Safe space
-4. Quiz card
-5. Back 2 spaces
-6. Go to jail
-7. Forward 1
-8. Bonus card
-9. Safe space
-10. Safe space
+## Board Spaces
+[Direction East] 1, 0, Q, -2, J, 1, B, 0, 0
+[Direction South] J, 0, 1, -2, 1, -2, 0
+[Direction West] B, 0, -2, Q, B, P
+(Path North) [Direction North] 0, 1
+(Path North) [Direction West] B, J, Q
+(Path North) [Direction North] -2, 0, F
+(Path West) [Direction West] 0, 1, J
+(Path West) [Direction North] -2, Q, -2, 0, F
 
-### Second Side
-11. Go to jail
-12. Safe space
-13. Forward 1
-14. Back 2 spaces
-15. Forward 1
-16. Back 2 spaces
-17. Safe space
+0 = Safe space
+1 = Jump one space
+-2 = Go back two spaces
+J = Go to Jail
+B = Pick up a bonus card
+Q = Pick up a bonus card
+F = Finish line
 
-### Third Side
-18. Bonus card
-19. Safe space
-20. Back 2 spaces
-21. Quiz card
-22. Bonus card
-23. Path choice
-
-### Path Options
-Path Up:
-1. Safe space
-2. Forward 1
-3. Bonus card
-4. Go to jail
-
-Path Left:
-1. Safe space
-2. Forward 1
-3. Go to jail
-4. Back 2 spaces
-
-### Final Stretch (Paths Converge)
-1. Quiz card
-2. Back 2 spaces
-3. Safe space
-4. Finish
-
-## Victory Condition
+## Ending Cutscene
+- When a player gets to the finish line, they glide to the victory area
+- Players are ordered in the victory area by who finished quicker
 - Game ends when all players reach the finish space
+- When playing with six players and everyone finishes, the credits roll
 
 ## Game Rules
-1. Players roll single die to move
+1. Players roll a single die to move
 2. Landing spots effects:
    - Forward 1: Move forward one space
    - Back 2 spaces: Move back two spaces
@@ -72,13 +45,19 @@ Path Left:
    - Bonus card (B): Draw Bonus card
    - Quiz card (Q): Draw Quiz card
 
-3. Jail Escape: Must roll even number on turn to exit
+3. Jail Escape: Must roll an even number on turn to exit
 
 4. Quiz Cards:
    - Correct answer: Stay on space
    - Incorrect answer: Move back two spaces
 
 5. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
+
+6. Turn ends once a player:
+   - Lands on a safe space
+   - Answers a quiz card correctly
+   - Escapes jail
+   - Fails to escape jail
 
 ## Card Details
 
@@ -120,16 +99,77 @@ Path Left:
    A: Left
 10. Q: What type of rock is formed in layers?
     A: Sedimentary
+### Quiz Cards (10)
+1. Q: What type of rock can you find fossils in?
+   A: Sedimentary
+   * Granite
+   * Sedimentary ✓
+   * Metamorphic
+
+2. Q: Is granite a metamorphic rock?
+   A: No
+   * Yes
+   * No ✓
+
+3. Q: How are igneous rocks formed?
+   A: By magma cooling
+   * By layers of sediment building up
+   * When magma cools down ✓
+   * From the Earth's crust
+   * When old rocks undergo intense pressure and heat
+
+4. Q: What is molten rock called underground?
+   A: Magma
+   * Magma ✓
+   * Erupt
+   * Lava
+
+5. Q: What rock contains lead?
+   A: Galena
+   * Andesite
+   * Coal
+   * Gneiss
+   * Galena ✓
+
+7. Q: What type of rock is formed by pressure and heat?
+   A: Metamorphic
+   * Metamorphic ✓
+   * Igneous
+
+8. Q: Is air a rock?
+   A: No
+   * Yes
+   * No ✓
+
+9. Q: What are the 3 main types of rock?
+   A: Sedimentary, Igneous, Metamorphic
+   * Molten, Solid, Liquid
+   * Smooth, Hard, Brittle
+   * Adhesion, Mohs, Bead
+   * Sedimentary, Igneous, Metamorphic ✓
+
+10. Q: What is your favorite flavor of math, true or false?
+   A: Left
+   * Soup
+   * Croissant
+   * Anti-Arctician
+   * Left ✓
+
+11. Q: What type of rock is formed in layers?
+    A: Sedimentary
+    * Sedimentary ✓
+    * When flowing water touches lava
+    * Igneous
 
 ## Visual Style
 - Background: Natural rock texture with various gray and brown stones
-- UI Elements: Clean, modern style with rounded buttons
-- Characters: White "Pebble Boi" figures with colored hats
-- Text: White text for headers, colored text for special spaces
+- UI Elements: Simple vector graphics
+- Characters: White "Pebble Boi" figures with coloured hats
+- Text: Black text, coloured text for special spaces, coloured text that represents the colour of each player
 
 ## Player Piece Visualization
 - Player pieces ("Pebble Bois") are semi-transparent to allow visibility of the square beneath
 - Multiple pieces on same square:
-  - First piece centers on square
+  - First piece centers on the square
   - Additional pieces overlap halfway off the square while still counting as being on that square
   - This allows all pieces to remain visible while maintaining their position status
