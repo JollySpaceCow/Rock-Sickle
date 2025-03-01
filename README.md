@@ -21,6 +21,7 @@ Starting from "Go" and following the perimeter clockwise:
 - (Path West) [Direction West] 0, 1, J
 - (Path West) [Direction North] -2, Q, -2, 0, F
 
+### Space Symbols
 - 0 = Safe space
 - 1 = Jump one space
 - -2 = Go back two spaces
