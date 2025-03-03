@@ -142,6 +142,12 @@ Starting from "Go" and following the perimeter clockwise:
     * When flowing water touches lava
     * Igneous
 
+12. Q: Which process turns sediment into rock?
+    A: Lithification
+    * Weathering
+    * Erosion
+    * Lithification ✓
+
 ## Visual Style
 - Background: Natural rock texture with various gray and brown stones
 - UI Elements: Simple vector graphics
