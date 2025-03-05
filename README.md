@@ -152,7 +152,7 @@ Starting from "Go" and following the perimeter clockwise:
 - If the player has more spaces to travel when they reach the pick a path space, they are stopped in their tracks and shown their options
 - A ghost of their character appears on both sides, showing which spaces they could end up at
 - They pick a path and continue moving by how many jumps they have left from their die roll
-- If a player rolls while they stand on the pick a path space, they will roll and then pick their direction
+- If a player starts their turn on the pick a path space, they will roll and then pick their direction
 
 ## Visual Style
 - Background: Natural rock texture with various gray and brown stones
