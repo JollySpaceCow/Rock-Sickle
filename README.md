@@ -1,41 +1,5 @@
 # Rock-Sickle
 
-## Game Components
-- 1 six-sided die
-- Game board with rocky background
-- 6 "Pebble Boi" player pieces (white characters with different colored hats: red, orange, yellow, green, blue, purple)
-- 15 Bonus Cards
-- 10 Quiz Cards
-- Stopwatch/timer functionality for high scores
-
-## Board Layout
-Starting from "Go" and following the perimeter clockwise:
-
-### Board Spaces
-- [Direction East] 1, 0, Q, -2, J, 1, B, 0, 0
-- [Direction South] J, 0, 1, -2, 1, -2, 0
-- [Direction West] B, 0, -2, Q, B, P
-- (Path North) [Direction North] 0, 1
-- (Path North) [Direction West] B, J, Q
-- (Path North) [Direction North] -2, 0, F
-- (Path West) [Direction West] 0, 1, J
-- (Path West) [Direction North] -2, Q, -2, 0, F
-
-### Space Symbols
-- 0 = Safe space
-- 1 = Jump one space
-- -2 = Go back two spaces
-- J = Go to Jail
-- B = Pick up a bonus card
-- Q = Pick up a bonus card
-- F = Finish line
-
-## Ending Cutscene
-- When a player gets to the finish line, they glide to the victory area
-- Players are ordered in the victory area by who finished quicker
-- Game ends when all players reach the finish space
-- When playing with six players and everyone finishes, the credits roll
-
 ## Game Rules
 1. Players roll a single die to move
    
@@ -60,6 +24,36 @@ Starting from "Go" and following the perimeter clockwise:
    - Answers a quiz card correctly
    - Escapes jail
    - Fails to escape jail
+
+## Board Layout
+Starting from "Go" and following the perimeter clockwise:
+
+### Board Spaces
+- [Direction East] 1, 0, Q, -2, J, 1, B, 0, 0
+- [Direction South] J, 0, 1, -2, 1, -2, 0
+- [Direction West] B, 0, -2, Q, B, P
+- (Path North) [Direction North] 0, 1
+- (Path North) [Direction West] B, J, Q
+- (Path North) [Direction North] -2, 0, F
+- (Path West) [Direction West] 0, 1, J
+- (Path West) [Direction North] -2, Q, -2, 0, F
+
+### Space Symbols
+- 0 = Safe space
+- 1 = Jump one space
+- -2 = Go back two spaces
+- J = Go to Jail
+- B = Pick up a bonus card
+- Q = Pick up a bonus card
+- F = Finish line
+
+## Game Components
+- 1 six-sided die
+- Game board with rocky background
+- 6 "Pebble Boi" player pieces (white characters with different colored hats: red, orange, yellow, green, blue, purple)
+- 15 Bonus Cards
+- 10 Quiz Cards
+- Stopwatch/timer functionality for high scores
 
 ## Card Details
 
@@ -154,19 +148,13 @@ Starting from "Go" and following the perimeter clockwise:
 - They pick a path and continue moving by how many jumps they have left from their die roll
 - If a player starts their turn on the pick a path space, they will roll and then pick their direction
 
-## Visual Style
-- Background: Natural rock texture with various gray and brown stones
-- UI Elements: Simple vector graphics
-- Characters: White "Pebble Boi" figures with coloured hats
-- Text: Black text, coloured text for special spaces, coloured text that represents the colour of each player
-
 ## Player Piece Visualization
 - Player pieces (pebble bois) are semi-transparent to allow visibility of the square beneath
 - Multiple pieces on same square:
   - First piece centers on the square
   - Additional pieces overlap halfway off the square while still counting as being on that square
   - This allows all pieces to remain visible while maintaining their position status
- 
+
 ## Computer Players
 - There are easy, normal, and hard computer players
 - Computer players roll, answer quiz cards, and choose paths on their own
@@ -179,3 +167,15 @@ Starting from "Go" and following the perimeter clockwise:
 - The start the game button is only green and clickable if there is at least one player set
 - A single clickable die is in the centre
 - It rolls with a drum roll and randomly jumps around the screen when the sound plays
+
+## Visual Style
+- Background: Natural rock texture with various gray and brown stones
+- UI Elements: Simple vector graphics
+- Characters: White "Pebble Boi" figures with coloured hats
+- Text: Black text, coloured text for special spaces, coloured text that represents the colour of each player
+
+## Ending Cutscene
+- When a player gets to the finish line, they glide to the victory area
+- Players are ordered in the victory area by who finished quicker
+- Game ends when all players reach the finish space
+- When playing with six players and everyone finishes, the credits roll
