@@ -339,6 +339,10 @@ class Player:
         self.path_choices = {}  # Store path choices for each choice point
         self.jail_x, self.jail_y = None, None  # Store player-specific jail position
         self.quiz_cards = 3
+        # Add these new attributes for jail standee markers
+        self.jail_from_x = None  # X-coordinate of the position before jail
+        self.jail_from_y = None  # Y-coordinate of the position before jail
+        self.jail_marker_anim_start = None  # Time when the standee animation begins
 
 def roll_die(difficulty=None):
     """Roll the die based on difficulty level."""
@@ -548,6 +552,11 @@ def apply_effect(player, square_type, game_state, scale):
         player.turn_ended = True
     elif square_type == 'J':
         player.prev_position = player.position
+        # Store the position where the player is sent to jail from
+        player.jail_from_x = player.current_x
+        player.jail_from_y = player.current_y
+        # Set animation start time for jail marker
+        player.jail_marker_anim_start = time.time()
         whiz_sound.play()
         
         # Calculate a random position within the jail bounds
@@ -681,27 +690,49 @@ def update_animation(game_state, scale):
             any_animations = True
             anim = player.active_animations[0]
             current_time = time.time()
+            
+            # Check if we need to play the jail movement sound after the delay
+            if 'is_jail_move' in anim and 'sound_delay' in anim and not anim.get('sound_played', False):
+                if current_time >= anim['sound_delay']:
+                    whiz_sound.play()  # Play the whiz sound for jail movement
+                    anim['sound_played'] = True
+                    # Start the actual movement only after the sound is played
+                    anim['last_time'] = current_time
+            
             if current_time - anim['last_time'] >= anim['delay']:
                 if 'is_jail_move' in anim:
-                    anim['current_step'] += 1
-                    if anim['current_step'] <= anim['steps']:
-                        anim['player'].current_x, anim['player'].current_y = interpolate_position(
-                            anim['start_pos'], anim['end_pos'], anim['steps'], anim['current_step']
-                        )
-                        anim['last_time'] = current_time
-                    else:
-                        if anim.get('jail_action') == 'enter':
-                            anim['player'].position = 10  # Jail position
-                            anim['player'].in_jail = True
-                            # Store final random position for drawing
-                            anim['player'].jail_x = anim['player'].current_x
-                            anim['player'].jail_y = anim['player'].current_y
-                        elif anim.get('jail_action') == 'exit':
-                            # Sound is now played at animation start instead of completion
-                            anim['player'].position = anim['player'].prev_position
-                            anim['player'].in_jail = False
-                        player.active_animations.pop(0)
-                        player.turn_ended = True
+                    # Only update animation if the sound delay has passed
+                    if anim.get('sound_played', True):
+                        anim['current_step'] += 1
+                        if anim['current_step'] <= anim['steps']:
+                            anim['player'].current_x, anim['player'].current_y = interpolate_position(
+                                anim['start_pos'], anim['end_pos'], anim['steps'], anim['current_step']
+                            )
+                            anim['last_time'] = current_time
+                        else:
+                            if anim.get('jail_action') == 'enter':
+                                anim['player'].position = 10  # Jail position
+                                anim['player'].in_jail = True
+                                # Store final random position for drawing
+                                anim['player'].jail_x = anim['player'].current_x
+                                anim['player'].jail_y = anim['player'].current_y
+                                
+                                # Clean up jail sound delay variables if they exist
+                                if anim.get('cleanup_jail_sound', False) and 'jail_sound_delay' in game_state:
+                                    if 'jail_sound_played' in game_state:
+                                        del game_state['jail_sound_played']
+                                    if 'jail_sound_delay' in game_state:
+                                        del game_state['jail_sound_delay']
+                            elif anim.get('jail_action') == 'exit':
+                                # Sound is now played at animation start instead of completion
+                                anim['player'].position = anim['player'].prev_position
+                                anim['player'].in_jail = False
+                                # Clear the jail marker when player exits jail
+                                anim['player'].jail_from_x = None
+                                anim['player'].jail_from_y = None
+                                anim['player'].jail_marker_anim_start = None
+                            player.active_animations.pop(0)
+                            player.turn_ended = True
                 else:
                     anim['index'] += 1
                     if anim['index'] < len(anim['path']):
@@ -986,6 +1017,7 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
 
     # Draw die
     dice_rect = pygame.Rect(int(DIE_POS[0] * scale + offset_x), int(DIE_POS[1] * scale + offset_y), int(50 * scale), int(50 * scale))
+    
     if game_state.get('rolling_dice', False):
         if time.time() - game_state['dice_start_time'] < 1:
             dice_face = random.choice(dice_images_scaled)
@@ -1011,6 +1043,10 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             if current_player.in_jail:
                 if roll % 2 == 0:
                     current_player.in_jail = False
+                    # Clear the jail marker when player escapes jail
+                    current_player.jail_from_x = None
+                    current_player.jail_from_y = None
+                    current_player.jail_marker_anim_start = None
                     anim = {
                         'player': current_player,
                         'start_pos': JAIL_POS,
@@ -1298,6 +1334,152 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 del game_state['quiz_shrink_start']
                 if 'quiz_answer_delay_start' in game_state:
                     del game_state['quiz_answer_delay_start']
+
+    # Draw jail standee markers for players in jail
+    # First, collect standee positions to handle staggering
+    standee_positions = {}  # Tracks positions and counts players at each position
+
+    # First pass - identify standee positions and group players
+    for player in players:
+        if player.jail_from_x is not None and player.jail_from_y is not None:
+            # Find the original tile position
+            square_x = int(player.jail_from_x * scale + offset_x)
+            square_y = int(player.jail_from_y * scale + offset_y)
+            
+            tile_found = False
+            for i, coord in enumerate(squares_coords):
+                scaled_x = int(coord[0] * scale + offset_x)
+                scaled_y = int(coord[1] * scale + offset_y)
+                
+                # If the player was on this tile
+                if abs(scaled_x - square_x) < 10 and abs(scaled_y - square_y) < 10:
+                    position_key = str(i)  # Use tile index as the key
+                    if position_key in standee_positions:
+                        standee_positions[position_key].append(player)
+                    else:
+                        standee_positions[position_key] = [player]
+                    tile_found = True
+                    break
+
+    # Second pass - draw standees with proper staggering
+    for position_key, players_at_position in standee_positions.items():
+        tile_index = int(position_key)
+        scaled_x = int(squares_coords[tile_index][0] * scale + offset_x)
+        scaled_y = int(squares_coords[tile_index][1] * scale + offset_y)
+        
+        # Get the tile image to position markers correctly
+        square_type = squares[tile_index]
+        if square_type in tile_images_scaled:
+            img = tile_images_scaled[square_type]
+        elif square_type == '1':
+            if tile_index in [1, 6]:
+                img = tile_images_scaled['1_East']
+            elif tile_index in [12, 14]:
+                img = tile_images_scaled['1_North']
+            elif tile_index == 24:
+                img = tile_images_scaled['1_West']
+            elif tile_index == 31:
+                img = tile_images_scaled['1_West']
+            else:
+                img = tile_images_scaled['1_East']
+        elif square_type == '-2':
+            if tile_index == 4:
+                img = tile_images_scaled['-2_West']
+            elif tile_index in [13, 15]:
+                img = tile_images_scaled['-2_South']
+            elif tile_index == 19:
+                img = tile_images_scaled['-2_East']
+            elif tile_index in [28, 33, 35]:
+                img = tile_images_scaled['-2_North']
+            else:
+                img = tile_images_scaled['-2_West']
+        else:
+            continue
+        
+        # Position at the top right of the tile
+        offset_val = int(5 * scale)  # Small offset from edge
+        tile_width = img.get_width()
+        tile_height = img.get_height()
+        
+        # Draw each player's standee with staggering
+        for i, player in enumerate(players_at_position):
+            # Stagger the markers to prevent overlapping
+            stagger_offset = i * int(8 * scale)
+            marker_x = scaled_x + tile_width // 2 - offset_val
+            marker_y = scaled_y - tile_height // 2 + offset_val + stagger_offset
+            
+            # Choose color based on if player is CPU or not
+            if player.is_computer:
+                marker_color = GRAY  # Grey for CPU players
+            else:
+                marker_color = player_colours[player.colour_index]  # Player's color for normal players
+            
+            # Get the current time for animation
+            current_time = time.time()
+            
+            # Set base marker size - smaller for better visibility
+            marker_radius = int(6 * scale)  # Smaller size to match regular markers
+            
+            # Apply animation effects if animation start time is set
+            if player.jail_marker_anim_start:
+                anim_duration = 0.25  # Animation duration in seconds
+                elapsed = current_time - player.jail_marker_anim_start
+                
+                if elapsed < anim_duration:
+                    # Grow from 0% to 100% size over 0.25 seconds
+                    anim_progress = elapsed / anim_duration
+                    # Ensure we start from a very small size and grow to full size
+                    animated_radius = int(marker_radius * anim_progress)
+                    # Different opacity based on color
+                    if player.colour_index in [4, 5]:  # Blue and Purple
+                        alpha = int(242 * anim_progress)  # 95% opacity for blue/purple
+                    else:
+                        alpha = int(200 * anim_progress)  # Original max opacity for others
+                    
+                    # Ensure the surface is large enough even for small circles
+                    surface_size = max(2, marker_radius * 2)  # Use max marker size for surface
+                    marker_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+                    
+                    # Draw circle centered in the surface
+                    center = surface_size // 2
+                    pygame.draw.circle(marker_surface, marker_color + (alpha,), (center, center), animated_radius)
+                    if animated_radius > 0:  # Only draw border if radius is positive
+                        pygame.draw.circle(marker_surface, BLACK + (alpha,), (center, center), animated_radius, 1)
+                    
+                    # Blit the surface
+                    screen.blit(marker_surface, (marker_x - center, marker_y - center))
+                else:
+                    # After animation completes, draw the circle normally
+                    marker_surface = pygame.Surface((marker_radius * 2, marker_radius * 2), pygame.SRCALPHA)
+                    # Different opacity based on color
+                    if player.colour_index in [4, 5]:  # Blue and Purple
+                        opacity = 242  # 95% opacity for blue/purple
+                    else:
+                        opacity = 128  # 50% opacity for others (original)
+                    
+                    pygame.draw.circle(marker_surface, marker_color + (opacity,), (marker_radius, marker_radius), marker_radius)
+                    pygame.draw.circle(marker_surface, BLACK + (opacity,), (marker_radius, marker_radius), marker_radius, 1)
+                    
+                    # Blit the surface
+                    screen.blit(marker_surface, (marker_x - marker_radius, marker_y - marker_radius))
+            else:
+                # Draw the regular circle if no animation
+                marker_surface = pygame.Surface((marker_radius * 2, marker_radius * 2), pygame.SRCALPHA)
+                # Different opacity based on color
+                if player.colour_index in [4, 5]:  # Blue and Purple
+                    opacity = 242  # 95% opacity for blue/purple
+                else:
+                    opacity = 128  # 50% opacity for others (original)
+                
+                pygame.draw.circle(marker_surface, marker_color + (opacity,), (marker_radius, marker_radius), marker_radius)
+                pygame.draw.circle(marker_surface, BLACK + (opacity,), (marker_radius, marker_radius), marker_radius, 1)
+                
+                # Blit the surface
+                screen.blit(marker_surface, (marker_x - marker_radius, marker_y - marker_radius))
+
+    # Return the rects for interactive elements
+    quiz_answer_rects = game_state.get('quiz_buttons', [])
+    return dice_rect, restart_button_rect, quiz_answer_rects if game_state.get('quiz_buttons') else []
 
 def toggle_player_state(index, player_states, difficulties):
     """Toggle a player's state between not set, human, or CPU."""
@@ -1683,9 +1865,20 @@ def main():
                             else:
                                 game_state['message'] = f"Player {player.id + 1} can't move back from the start."
                         elif effect[0] == "go_to_jail":
-                            mac_os_uh_ohh_sound.play()
-                            whiz_sound.play()  # Play the whiz sound for jail movement
+                            # Instead of playing the sound immediately, set a delay to play it
+                            # This will give the bonus card pickup sound time to finish
+                            game_state['jail_sound_delay'] = time.time() + 0.75  # 0.75 second delay before playing uh-oh sound
+                            game_state['jail_sound_played'] = False
+                            
+                            # Instead of playing whiz_sound immediately, we'll play it after a delay
+                            # when the animation starts
                             player.prev_position = player.position
+                            
+                            # Store the position where the player is sent to jail from
+                            player.jail_from_x = player.current_x
+                            player.jail_from_y = player.current_y
+                            # Set animation start time for jail marker
+                            player.jail_marker_anim_start = time.time()
                             
                             # Calculate a random position within the jail bounds
                             jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
@@ -1702,7 +1895,10 @@ def main():
                                 'message': f"Player {player.id + 1} sent to jail by bonus card.",
                                 'is_jail_move': True,
                                 'delay': 0.0167,
-                                'jail_action': 'enter'
+                                'jail_action': 'enter',
+                                'sound_delay': time.time() + 1.25,  # Increased from 1.0 to 1.25 for a small gap after uh-ohh sound
+                                'sound_played': False,  # Flag to track if whiz sound has been played
+                                'cleanup_jail_sound': True  # Flag to clean up jail sound variables when animation completes
                             }
                             player.active_animations.append(anim)
                             # No need to set turn_ended here, it will be set when animation completes
@@ -1765,6 +1961,12 @@ def main():
                     if current_player.in_jail:
                         message, moved = move_player(current_player, game_state)
                         game_state['message'] = message
+                        # If player has escaped jail (check after move_player which may clear in_jail)
+                        if not current_player.in_jail:
+                            # Clear the jail marker
+                            current_player.jail_from_x = None
+                            current_player.jail_from_y = None
+                            current_player.jail_marker_anim_start = None
                     # Check if current position has path choices
                     elif isinstance(next_positions[current_player.position], list):
                         message, moved = move_player(current_player, game_state)
@@ -1989,7 +2191,14 @@ def main():
                             # Make sure has_rolled is set to true to ensure turn ends properly
                             current_player.has_rolled = True
 
-            draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, bonus_result_images_scaled)
+            dice_rect, restart_button_rect, quiz_answer_rects = draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, bonus_result_images_scaled)
+            
+            # Check if it's time to play the jail sound
+            if game_state.get('jail_sound_delay') and not game_state.get('jail_sound_played', False):
+                if time.time() > game_state['jail_sound_delay']:
+                    mac_os_uh_ohh_sound.play()
+                    game_state['jail_sound_played'] = True
+            
             pygame.display.flip()
             clock.tick(60)
 
@@ -1997,4 +2206,4 @@ def main():
     sys.exit()
 
 if __name__ == "__main__":
-    main()
+    main() 
