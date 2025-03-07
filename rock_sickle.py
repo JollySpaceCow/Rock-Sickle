@@ -195,6 +195,15 @@ try:
     voltage_hard_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage3 (Hard CPU Player Selected).wav"))
     whit_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Whit (Player Set).wav"))
     restart_sound = pygame.mixer.Sound(load_asset("Assets/Audio/SE4_F_MAWASU_ROUND1.wav"))
+    
+    # Load CPU-specific sound effects
+    bonk_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/BonkCPU.wav"))
+    glug_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/GlugCPU.wav"))
+    head_shake_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Head ShakeCPU.wav"))
+    jump_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/JumpCPU.wav"))
+    whiz_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/WhizCPU.wav"))
+    wobble_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/WobbleCPU.wav"))
+    
     logger.info("Audio assets loaded successfully")
 except Exception as e:
     logger.error(f"Error loading audio assets: {e}")
@@ -416,49 +425,66 @@ def apply_effect(player, square_type, game_state, scale):
             message = f"Player {player.id + 1} can't move forward."
             player.turn_ended = True
     elif square_type == '-2':
-        if player.position == 0 or len(player.position_history) < 2:
+        if player.position == 0:
             message = f"Player {player.id + 1} can't move back."
             player.turn_ended = True
         else:
+            # Move back 2 spaces
             num_back = 2
-            if len(player.position_history) > num_back:
-                target_pos = player.position_history[-num_back - 1]
-                movement_path = [player.position] + player.position_history[-2:-num_back - 2:-1]
+            # Calculate target position (at most back to start)
+            target_pos = max(0, player.position - num_back)
+            # Create movement path
+            movement_path = [player.position]
+            
+            # If position is 2 or greater, go back 2 spaces
+            if player.position >= num_back:
+                for i in range(1, num_back + 1):
+                    movement_path.append(player.position - i)
+            # Otherwise go back to the start
             else:
-                target_pos = 0
-                movement_path = [player.position] + player.position_history[:-1]
+                for i in range(1, player.position + 1):
+                    movement_path.append(player.position - i)
+            
             anim = {
                 'player': player,
                 'path': movement_path,
                 'index': 0,
                 'last_time': time.time(),
-                'message': f"Moving back to {squares[target_pos]}.",
+                'message': f"Moving back {len(movement_path)-1} spaces.",
                 'is_backwards': True,
                 'delay': 0.5
             }
             player.active_animations.append(anim)
             message = f"Player {player.id + 1} moves back 2 spaces."
             chain = True
-            player.turn_ended = False
     elif square_type == 'B':
         if bonus_card_index < len(bonus_cards):
-            bonus = bonus_cards[bonus_card_index]
-            bonus_card_index = (bonus_card_index + 1) % len(bonus_cards)
-            drip_drop_sound.play()
-            effect = parse_bonus_card(bonus)
-            image_key = get_bonus_image_key(effect)
-            if image_key:
-                game_state['bonus_image_key'] = image_key
-                game_state['bonus_image_start'] = time.time()
-                game_state['bonus_image_state'] = 'waiting'
-                game_state['bonus_action'] = effect
-                message = f"Player {player.id + 1} picks bonus card: {bonus}."
+            # Only proceed with picking a card if we haven't picked one yet
+            if not game_state.get('bonus_image_key'):
+                bonus = bonus_cards[bonus_card_index]
+                bonus_card_index = (bonus_card_index + 1) % len(bonus_cards)
+                drip_drop_sound.play()
+                effect = parse_bonus_card(bonus)
+                image_key = get_bonus_image_key(effect)
+                if image_key:
+                    game_state['bonus_image_key'] = image_key
+                    game_state['bonus_image_start'] = time.time()
+                    game_state['bonus_image_state'] = 'waiting'
+                    game_state['bonus_action'] = effect
+                    message = f"Player {player.id + 1} picks bonus card: {bonus}."
+                else:
+                    message = f"Player {player.id + 1} picks unknown bonus card."
+                # Set the processing_bonus_card flag to prevent re-entry
+                game_state['processing_bonus_card'] = True
             else:
-                message = f"Player {player.id + 1} picks unknown bonus card."
+                message = f"Player {player.id + 1} is already processing a bonus card."
             player.turn_ended = True
+            # Make sure has_rolled is set to ensure turn will end properly
+            player.has_rolled = True
         else:
             message = f"Player {player.id + 1} has no bonus cards left."
             player.turn_ended = True
+            player.has_rolled = True
     elif square_type == 'Q':
         if quiz_card_index < len(quiz_cards):
             question, options, correct = quiz_cards[quiz_card_index]
@@ -545,15 +571,34 @@ def apply_quiz_effect(player, correct, game_state, scale):
         game_state['quiz_answer_delay_start'] = time.time()
         if 'quiz_buttons' in game_state:
             del game_state['quiz_buttons']
+        
+        # Set has_rolled to true to ensure turn ends properly
+        player.has_rolled = True
+        
+        # If this quiz came from a bonus card, make sure the bonus processing is completed
+        if game_state.get('processing_bonus_card', False):
+            # Mark that a quiz from a bonus card was answered correctly
+            game_state['quiz_from_bonus_completed'] = True
     else:
         game_state['message'] = f"Player {player.id + 1} answered wrong. Moving back 2 spaces."
         bing_bong_sound.play()
-        if len(player.position_history) > 2:
-            target_pos = player.position_history[-3]
-            movement_path = player.position_history[-1:-4:-1]
+        
+        # Move back 2 spaces (or to the start)
+        num_back = 2
+        target_pos = max(0, player.position - num_back)
+        
+        # Create movement path
+        movement_path = [player.position]
+        
+        # If position is 2 or greater, go back 2 spaces
+        if player.position >= num_back:
+            for i in range(1, num_back + 1):
+                movement_path.append(player.position - i)
+        # Otherwise go back to the start
         else:
-            target_pos = 0
-            movement_path = player.position_history[::-1] + [0] * (2 - len(player.position_history) + 1)
+            for i in range(1, player.position + 1):
+                movement_path.append(player.position - i)
+        
         anim = {
             'player': player,
             'path': movement_path,
@@ -568,6 +613,12 @@ def apply_quiz_effect(player, correct, game_state, scale):
         game_state['quiz_answer_delay_start'] = time.time()
         if 'quiz_buttons' in game_state:
             del game_state['quiz_buttons']
+        player.turn_ended = True  # Ensure turn ends even on wrong answer
+        
+        # If this quiz came from a bonus card, make sure the bonus processing is completed
+        if game_state.get('processing_bonus_card', False):
+            # Mark that a quiz from a bonus card was answered (incorrectly)
+            game_state['quiz_from_bonus_completed'] = True
 
 def update_animation(game_state, scale):
     """Update all active animations in the game."""
@@ -590,6 +641,7 @@ def update_animation(game_state, scale):
                             anim['player'].position = 10  # Jail position
                             anim['player'].in_jail = True
                         elif anim.get('jail_action') == 'exit':
+                            # Sound is now played at animation start instead of completion
                             anim['player'].position = anim['player'].prev_position
                             anim['player'].in_jail = False
                         player.active_animations.pop(0)
@@ -597,26 +649,55 @@ def update_animation(game_state, scale):
                 else:
                     anim['index'] += 1
                     if anim['index'] < len(anim['path']):
+                        # Update player position to match current point in animation path
                         anim['player'].position = anim['path'][anim['index']]
                         anim['player'].current_x, anim['player'].current_y = squares_coords[anim['player'].position]
-                        if 'is_backwards' not in anim and anim['player'].position not in anim['player'].position_history:
-                            anim['player'].position_history.append(anim['player'].position)
-                        elif 'is_backwards' in anim and len(anim['player'].position_history) > 2:
-                            anim['player'].position_history.pop()
+                        
+                        # Handle position history differently for forwards vs backwards movement
+                        if 'is_backwards' not in anim:
+                            # For forward movement, add positions to history if not already there
+                            if anim['player'].position not in anim['player'].position_history:
+                                anim['player'].position_history.append(anim['player'].position)
+                        else:
+                            # For backward movement, we're moving to a position we were in before,
+                            # so we remove positions from history until we match our current position
+                            while (len(anim['player'].position_history) > 0 and 
+                                   anim['player'].position_history[-1] > anim['player'].position):
+                                anim['player'].position_history.pop()
+                        
                         anim['last_time'] = current_time
                         if 'is_initial_move' in anim and anim['is_initial_move']:
-                            glug_sound.play()
+                            # Play CPU or human glug sound based on player type
+                            if anim['player'].is_computer:
+                                glug_cpu_sound.play()
+                            else:
+                                glug_sound.play()
                         elif 'is_backwards' in anim:
-                            wobble_sound.play()
+                            # Play CPU or human wobble sound based on player type
+                            if anim['player'].is_computer:
+                                wobble_cpu_sound.play()
+                            else:
+                                wobble_sound.play()
                         else:
-                            jump_sound.play()
+                            # Play CPU or human jump sound based on player type
+                            if anim['player'].is_computer:
+                                jump_cpu_sound.play()
+                            else:
+                                jump_sound.play()
                         game_state['message'] = anim['message'] + f" Moved to {squares[anim['player'].position]}."
                     else:
                         # If this was a backwards movement, end turn without applying square effects
                         if 'is_backwards' in anim:
                             player.active_animations.pop(0)
-                            player.turn_ended = True
-                            game_state['message'] = anim['message'] + f" Landed on {squares[anim['player'].position]}."
+                            square_type = squares[anim['player'].position]
+                            # Apply effects for the square the player landed on after moving backwards
+                            message, chain = apply_effect(anim['player'], square_type, game_state, scale)
+                            if message:
+                                game_state['message'] = message
+                            if not chain:
+                                player.turn_ended = True
+                            else:
+                                player.turn_ended = False
                         else:
                             square_type = squares[anim['player'].position]
                             message, chain = apply_effect(anim['player'], square_type, game_state, scale)
@@ -780,34 +861,6 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 img = player_images_scaled[player.colour_index]
             screen.blit(img, (x - img.get_width() // 2, y - img.get_height() // 2))
 
-    # Draw bonus image with proper centering and 4:3 aspect ratio, starting from die position
-    if 'bonus_image_key' in game_state and 'bonus_image_state' in game_state:
-        image = bonus_result_images_scaled[game_state['bonus_image_key']]
-        state = game_state['bonus_image_state']
-        die_center_x = int(DIE_POS[0] * scale + offset_x)  # Die center X
-        die_center_y = int(DIE_POS[1] * scale + offset_y)  # Die center Y
-        
-        if state == 'growing':
-            elapsed = time.time() - game_state['bonus_grow_start']
-            scale_factor = min(1.0, elapsed / 1.0)  # Grows over 1 second
-            scaled_width = int(image.get_width() * scale_factor)
-            scaled_height = int(image.get_height() * scale_factor)
-            scaled_image = pygame.transform.smoothscale(image, (scaled_width, scaled_height))
-            rect = scaled_image.get_rect(center=(die_center_x, die_center_y))
-            screen.blit(scaled_image, rect.topleft)
-        elif state == 'showing':
-            # Full size, centered on die position
-            rect = image.get_rect(center=(die_center_x, die_center_y))
-            screen.blit(image, rect.topleft)
-        elif state == 'shrinking':
-            elapsed = time.time() - game_state['bonus_shrink_start']
-            scale_factor = max(0.0, 1.0 - elapsed / 1.0)  # Shrinks over 1 second
-            scaled_width = int(image.get_width() * scale_factor)
-            scaled_height = int(image.get_height() * scale_factor)
-            scaled_image = pygame.transform.smoothscale(image, (scaled_width, scaled_height))
-            rect = scaled_image.get_rect(center=(die_center_x, die_center_y))
-            screen.blit(scaled_image, rect.topleft)
-
     current_player = players[game_state['current_player']]
     next_id = (game_state['current_player'] + 1) % len(players)
     while next_id < len(players) and players[next_id].finished and len(game_state.get('finish_order', [])) < len(players):
@@ -820,6 +873,7 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
     if 'message' in game_state:
         render_coloured_message(screen, font, game_state['message'], int(50 * scale), int(500 * scale), offset_x, offset_y, players, player_colours)
 
+    # Draw die
     dice_rect = pygame.Rect(int(DIE_POS[0] * scale + offset_x), int(DIE_POS[1] * scale + offset_y), int(50 * scale), int(50 * scale))
     if game_state.get('rolling_dice', False):
         if time.time() - game_state['dice_start_time'] < 1:
@@ -858,8 +912,12 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                         'delay': 0.0167,  # ~60fps (1/60 second)
                         'jail_action': 'exit'
                     }
+                    # Play the sound when animation starts
+                    if current_player.is_computer:
+                        head_shake_cpu_sound.play()
+                    else:
+                        head_shake_sound.play()
                     current_player.active_animations.append(anim)
-                    head_shake_sound.play()
                     current_player.turn_ended = True
                 else:
                     bonk_sound.play()
@@ -869,6 +927,7 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 if isinstance(next_positions[current_player.position], list):
                     game_state['show_path_choice_after_roll'] = True
                     game_state['roll_for_path_choice'] = roll
+                    game_state['spaces_remaining'] = roll  # Set remaining spaces to full roll
                     game_state['message'] = f"Player {current_player.id + 1} rolled {roll}. Choose a path."
                 else:
                     movement_path = get_movement_path(current_player.position, roll, game_state)
@@ -887,6 +946,160 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
         dice_face = dice_images_scaled[game_state['final_dice_roll'] - 1]
         screen.blit(dice_face, dice_rect.topleft)
 
+    # Draw path choice if active
+    if game_state.get('show_path_choice_after_roll', False):
+        current_player = players[game_state['current_player']]
+        current_pos = current_player.position
+        choices = next_positions[current_pos]
+        remaining_spaces = game_state.get('spaces_remaining', 0)
+        
+        # Show ghost players at potential end positions
+        for choice in choices:
+            # Calculate the full path for this choice including all remaining moves
+            full_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces)
+            ending_pos = full_path[-1]
+            
+            # Draw a ghost player at the ending position
+            x, y = squares_coords[ending_pos]
+            x = int(x * scale + offset_x)
+            y = int(y * scale + offset_y)
+            
+            # Draw a special marker for the end position
+            pygame.draw.circle(screen, (255, 255, 0), (x, y), int(20 * scale), 3)
+            
+            # Draw the ghost player
+            img = player_images_scaled[current_player.colour_index]
+            img_copy = img.copy()
+            img_copy.set_alpha(150)  # Increased transparency for better visibility
+            screen.blit(img_copy, (x - img_copy.get_width() // 2, y - img_copy.get_height() // 2))
+        
+        # Draw path choice dialog centered on die position
+        die_center_x = int(DIE_POS[0] * scale + offset_x)
+        die_center_y = int(DIE_POS[1] * scale + offset_y)
+        dialog_width = int(300 * scale)
+        dialog_height = int(180 * scale)
+        rect = pygame.Rect(die_center_x - dialog_width // 2, die_center_y - dialog_height // 2, dialog_width, dialog_height)
+        
+        # Draw dialog background with border
+        pygame.draw.rect(screen, WHITE, rect)
+        pygame.draw.rect(screen, (0, 0, 100), rect, 3)  # Dark blue border
+        
+        # Draw title with shadow
+        title_shadow = font.render(f"Choose Your Path!", True, (100, 100, 100))
+        screen.blit(title_shadow, (rect.x + int(12 * scale), rect.y + int(12 * scale)))
+        
+        title = font.render(f"Choose Your Path!", True, (0, 0, 150))  # Dark blue text
+        screen.blit(title, (rect.x + int(10 * scale), rect.y + int(10 * scale)))
+        
+        # Draw remaining spaces info
+        spaces_text = font.render(f"Remaining Spaces: {remaining_spaces}", True, (100, 0, 0))  # Red text for visibility
+        screen.blit(spaces_text, (rect.x + int(10 * scale), rect.y + int(40 * scale)))
+        
+        labels = ["North", "West"]
+        button_height = int(35 * scale)
+        button_spacing = int(15 * scale)
+        
+        game_state['path_buttons'] = []
+        
+        for i, (label, choice) in enumerate(zip(labels, choices)):
+            full_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces)
+            ending_pos = full_path[-1]
+            end_square_type = squares[ending_pos]
+            
+            # Create a more detailed button
+            button = pygame.Rect(
+                rect.x + int(20 * scale),
+                rect.y + int(80 * scale) + i * (button_height + button_spacing),
+                int(260 * scale),
+                button_height
+            )
+            
+            # Draw button with gradient effect
+            button_color = (200, 230, 255) if i == 0 else (255, 230, 200)
+            
+            # Add splash effect for path choice buttons
+            if 'clicked_path_button' in game_state and game_state['clicked_path_button'] == i:
+                # Get elapsed time since click
+                current_time = time.time()
+                click_elapsed = current_time - game_state['path_button_click_time']
+                if click_elapsed < 0.3:  # Show splash effect for 0.3 seconds
+                    # Change color for pressed effect
+                    button_color = (180, 210, 235) if i == 0 else (235, 210, 180)  # Slightly darker for pressed effect
+                else:
+                    # Remove click effect after time elapsed
+                    del game_state['clicked_path_button']
+                    del game_state['path_button_click_time']
+            
+            pygame.draw.rect(screen, button_color, button)
+            pygame.draw.rect(screen, (0, 0, 100), button, 2)  # Dark blue border
+            
+            # Draw button text with destination info
+            direction_text = font.render(f"{label} Path", True, BLACK)
+            screen.blit(direction_text, (button.x + int(10 * scale), button.y + int(5 * scale)))
+            
+            dest_text = font.render(f"Ends on: {end_square_type}", True, (100, 0, 0))
+            screen.blit(dest_text, (button.x + int(130 * scale), button.y + int(5 * scale)))
+            
+            game_state['path_buttons'].append((button, choice))
+
+    # Reset button with hold progress and spinning animation during restart
+    restart_button_size = int(50 * scale)
+    restart_button_rect = pygame.Rect(int(650 * scale + offset_x), int(540 * scale + offset_y), restart_button_size, restart_button_size)
+    
+    if 'fade_start' in game_state:
+        fade_time = time.time() - game_state['fade_start']
+        if fade_time < 0.7:  # Spinning phase: 3 spins in 0.7 seconds
+            angle = (fade_time * 1080 / 0.7) % 360
+            rotated_button = pygame.transform.rotate(restart_button_scaled, angle)
+            rotated_rect = rotated_button.get_rect(center=restart_button_rect.center)
+            screen.blit(rotated_button, rotated_rect.topleft)
+        elif fade_time < 1.0:  # Fade-out phase: 0.3 seconds
+            alpha = int(255 * (1 - (fade_time - 0.7) / 0.3))
+            faded_button = restart_button_scaled.copy()
+            faded_button.set_alpha(alpha)
+            screen.blit(faded_button, restart_button_rect.topleft)
+    elif game_state.get('restart_hold_start') is not None:
+        hold_time = time.time() - game_state['restart_hold_start']
+        progress = min(hold_time / 1.5, 1.0)
+        shake_offset = int(5 * math.sin(hold_time * 10))
+        draw_pos = (restart_button_rect.x + shake_offset, restart_button_rect.y)
+        screen.blit(restart_button_scaled, draw_pos)
+        bar_width = int(restart_button_size * progress)
+        bar_height = int(5 * scale)
+        bar_rect = pygame.Rect(draw_pos[0], draw_pos[1] + restart_button_size, bar_width, bar_height)
+        pygame.draw.rect(screen, GREEN, bar_rect)
+    else:
+        screen.blit(restart_button_scaled, restart_button_rect.topleft)
+
+    # Draw bonus image
+    if 'bonus_image_key' in game_state and 'bonus_image_state' in game_state:
+        image = bonus_result_images_scaled[game_state['bonus_image_key']]
+        state = game_state['bonus_image_state']
+        die_center_x = int(DIE_POS[0] * scale + offset_x)  # Die center X
+        die_center_y = int(DIE_POS[1] * scale + offset_y)  # Die center Y
+        
+        if state == 'growing':
+            elapsed = time.time() - game_state['bonus_grow_start']
+            scale_factor = min(1.0, elapsed / 1.0)  # Grows over 1 second
+            scaled_width = int(image.get_width() * scale_factor)
+            scaled_height = int(image.get_height() * scale_factor)
+            scaled_image = pygame.transform.smoothscale(image, (scaled_width, scaled_height))
+            rect = scaled_image.get_rect(center=(die_center_x, die_center_y))
+            screen.blit(scaled_image, rect.topleft)
+        elif state == 'showing':
+            # Full size, centered on die position
+            rect = image.get_rect(center=(die_center_x, die_center_y))
+            screen.blit(image, rect.topleft)
+        elif state == 'shrinking':
+            elapsed = time.time() - game_state['bonus_shrink_start']
+            scale_factor = max(0.0, 1.0 - elapsed / 1.0)  # Shrinks over 1 second
+            scaled_width = int(image.get_width() * scale_factor)
+            scaled_height = int(image.get_height() * scale_factor)
+            scaled_image = pygame.transform.smoothscale(image, (scaled_width, scaled_height))
+            rect = scaled_image.get_rect(center=(die_center_x, die_center_y))
+            screen.blit(scaled_image, rect.topleft)
+
+    # Draw quiz last to ensure it's always on top
     if game_state.get('show_quiz', False) and game_state.get('quiz_question'):
         current_time = time.time()
         elapsed = current_time - game_state['quiz_start_time']
@@ -932,7 +1145,21 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                     quiz_width - int(20 * scale),
                     button_height
                 )
-                pygame.draw.rect(screen, BLUE, button)
+                
+                # Check if this button is currently being clicked (splash effect)
+                button_color = BLUE
+                if 'clicked_quiz_button' in game_state and game_state['clicked_quiz_button'] == i:
+                    # Get elapsed time since click
+                    click_elapsed = current_time - game_state['button_click_time']
+                    if click_elapsed < 0.3:  # Show splash effect for 0.3 seconds
+                        # Change color for splash effect
+                        button_color = (100, 100, 200)  # Lighter blue for pressed effect
+                    else:
+                        # Remove click effect after time elapsed
+                        del game_state['clicked_quiz_button']
+                        del game_state['button_click_time']
+                
+                pygame.draw.rect(screen, button_color, button)
                 text = font.render(option, True, WHITE)
                 screen.blit(text, (button.x + int(10 * scale), button.y + int(5 * scale)))
                 quiz_buttons.append((button, i))
@@ -960,82 +1187,6 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 del game_state['quiz_shrink_start']
                 if 'quiz_answer_delay_start' in game_state:
                     del game_state['quiz_answer_delay_start']
-
-    if game_state.get('show_path_choice_after_roll', False):
-        current_player = players[game_state['current_player']]
-        current_pos = current_player.position
-        choices = next_positions[current_pos]
-        remaining_spaces = game_state.get('spaces_remaining', 0)
-        
-        # Show ghost players at potential end positions
-        for choice in choices:
-            movement_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces)
-            ending_pos = movement_path[-1]
-            x, y = squares_coords[ending_pos]
-            x = int(x * scale + offset_x)
-            y = int(y * scale + offset_y)
-            img = player_images_scaled[current_player.colour_index]
-            img_copy = img.copy()
-            img_copy.set_alpha(128)
-            screen.blit(img_copy, (x - img_copy.get_width() // 2, y - img_copy.get_height() // 2))
-        
-        # Draw path choice dialog centered on die position
-        die_center_x = int(DIE_POS[0] * scale + offset_x)
-        die_center_y = int(DIE_POS[1] * scale + offset_y)
-        dialog_width = int(300 * scale)
-        dialog_height = int(150 * scale)
-        rect = pygame.Rect(die_center_x - dialog_width // 2, die_center_y - dialog_height // 2, dialog_width, dialog_height)
-        pygame.draw.rect(screen, WHITE, rect)
-        text = font.render(f"Choose Path (Spaces left: {remaining_spaces}):", True, BLACK)
-        screen.blit(text, (rect.x + int(10 * scale), rect.y + int(10 * scale)))
-        
-        buttons = []
-        labels = ["North", "West"]
-        button_height = int(25 * scale)
-        button_spacing = int(5 * scale)
-        for i, (label, choice) in enumerate(zip(labels, choices)):
-            movement_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces)
-            ending_pos = movement_path[-1]
-            button = pygame.Rect(
-                rect.x + int(10 * scale),
-                rect.y + int(50 * scale) + i * (button_height + button_spacing),
-                dialog_width - int(20 * scale),
-                button_height
-            )
-            pygame.draw.rect(screen, BLUE, button)
-            text = font.render(f"{label} (ends at {ending_pos})", True, WHITE)
-            screen.blit(text, (button.x + int(10 * scale), button.y + int(5 * scale)))
-            buttons.append((button, choice))
-        game_state['path_buttons'] = buttons
-
-    # Reset button with hold progress and spinning animation during restart
-    restart_button_size = int(50 * scale)
-    restart_button_rect = pygame.Rect(int(650 * scale + offset_x), int(540 * scale + offset_y), restart_button_size, restart_button_size)
-    
-    if 'fade_start' in game_state:
-        fade_time = time.time() - game_state['fade_start']
-        if fade_time < 0.7:  # Spinning phase: 3 spins in 0.7 seconds
-            angle = (fade_time * 1080 / 0.7) % 360
-            rotated_button = pygame.transform.rotate(restart_button_scaled, angle)
-            rotated_rect = rotated_button.get_rect(center=restart_button_rect.center)
-            screen.blit(rotated_button, rotated_rect.topleft)
-        elif fade_time < 1.0:  # Fade-out phase: 0.3 seconds
-            alpha = int(255 * (1 - (fade_time - 0.7) / 0.3))
-            faded_button = restart_button_scaled.copy()
-            faded_button.set_alpha(alpha)
-            screen.blit(faded_button, restart_button_rect.topleft)
-    elif game_state.get('restart_hold_start') is not None:
-        hold_time = time.time() - game_state['restart_hold_start']
-        progress = min(hold_time / 1.5, 1.0)
-        shake_offset = int(5 * math.sin(hold_time * 10))
-        draw_pos = (restart_button_rect.x + shake_offset, restart_button_rect.y)
-        screen.blit(restart_button_scaled, draw_pos)
-        bar_width = int(restart_button_size * progress)
-        bar_height = int(5 * scale)
-        bar_rect = pygame.Rect(draw_pos[0], draw_pos[1] + restart_button_size, bar_width, bar_height)
-        pygame.draw.rect(screen, GREEN, bar_rect)
-    else:
-        screen.blit(restart_button_scaled, restart_button_rect.topleft)
 
 def toggle_player_state(index, player_states, difficulties):
     """Toggle a player's state between not set, human, or CPU."""
@@ -1181,7 +1332,7 @@ def resize_assets(scale):
     restart_button_scaled = pygame.transform.smoothscale(restart_button_original, (int(50 * scale), int(50 * scale)))
     
     # Scale bonus images with a smaller size (300x225 instead of 400x300)
-    target_width = int(300 * scale)  # Smaller base width
+    target_width = int(250 * scale)  # Reduced from 300 to 250
     target_height = int(target_width * 3 / 4)  # Height preserves 4:3 ratio
     bonus_result_images_scaled = {
         key: pygame.transform.smoothscale(img, (target_width, target_height))
@@ -1221,7 +1372,8 @@ def main():
             'players': players,
             'last_scale': scale,
             'restart_hold_start': None,
-            'restart_ready': False
+            'restart_ready': False,
+            'processing_bonus_card': False  # Add a flag to track if we're currently processing a bonus card
         }
         clock = pygame.time.Clock()
 
@@ -1249,7 +1401,8 @@ def main():
                         current_player = players[game_state['current_player']]
                         if not current_player.is_computer and not game_state.get('show_quiz', False) and \
                            not game_state.get('show_path_choice_after_roll', False) and \
-                           not game_state.get('rolling_dice', False) and not current_player.has_rolled:
+                           not game_state.get('rolling_dice', False) and not current_player.has_rolled and \
+                           not game_state.get('bonus_image_state') and not animations_active:
                             message, moved = move_player(current_player, game_state)
                             game_state['message'] = message
                     if game_state.get('show_quiz', False) and 'quiz_buttons' in game_state:
@@ -1289,12 +1442,17 @@ def main():
                     dice_rect = pygame.Rect(int(DIE_POS[0] * scale + offset_x), int(DIE_POS[1] * scale + offset_y), int(50 * scale), int(50 * scale))
                     current_player = players[game_state['current_player']]
                     if not current_player.is_computer and dice_rect.collidepoint(pos) and not game_state.get('show_quiz', False) and \
-                           not game_state.get('show_path_choice_after_roll', False) and not game_state.get('rolling_dice', False) and not current_player.has_rolled:
+                           not game_state.get('show_path_choice_after_roll', False) and not game_state.get('rolling_dice', False) and \
+                           not current_player.has_rolled and not game_state.get('bonus_image_state') and not animations_active:
                         message, moved = move_player(current_player, game_state)
                         game_state['message'] = message
                     if game_state.get('show_quiz', False) and 'quiz_buttons' in game_state:
                         for button, option_index in game_state['quiz_buttons']:
                             if button.collidepoint(pos):
+                                # Add splash effect tracking
+                                game_state['clicked_quiz_button'] = option_index
+                                game_state['button_click_time'] = time.time()
+                                
                                 _, _, correct = game_state['quiz_question']
                                 if option_index == correct:
                                     apply_quiz_effect(current_player, True, game_state, scale)
@@ -1303,9 +1461,12 @@ def main():
                     if game_state.get('show_path_choice_after_roll', False) and 'path_buttons' in game_state:
                         for button, choice in game_state['path_buttons']:
                             if button.collidepoint(pos):
-                                remaining_spaces = game_state.get('spaces_remaining', 0)
-                                # Store the player's choice for this position
+                                # Add splash effect tracking for path buttons
+                                game_state['clicked_path_button'] = game_state['path_buttons'].index((button, choice))
+                                game_state['path_button_click_time'] = time.time()
+                                
                                 current_player.path_choices[current_player.position] = choice
+                                remaining_spaces = game_state.get('spaces_remaining', 0)
                                 movement_path = get_movement_path_with_choice(current_player.position, choice, remaining_spaces)
                                 anim = {
                                     'player': current_player,
@@ -1347,7 +1508,7 @@ def main():
             if 'bonus_image_state' in game_state:
                 current_time = time.time()
                 if game_state['bonus_image_state'] == 'waiting':
-                    if current_time - game_state['bonus_image_start'] >= 0.5:
+                    if current_time - game_state['bonus_image_start'] >= 0.8:  # Increased from 0.5 to 0.8
                         game_state['bonus_image_state'] = 'growing'
                         game_state['bonus_grow_start'] = current_time
                 elif game_state['bonus_image_state'] == 'growing':
@@ -1357,6 +1518,10 @@ def main():
                         # Start the bonus action
                         player = players[game_state['current_player']]
                         effect = game_state['bonus_action']
+                        
+                        # Add a 2-second timer for bonus card to close after action is started
+                        game_state['bonus_action_start_time'] = current_time
+                        
                         if effect[0] == "move_forward":
                             num = effect[1]
                             movement_path = get_movement_path(player.position, num, game_state)
@@ -1367,27 +1532,38 @@ def main():
                                 'last_time': time.time(),
                                 'message': f"Player {player.id + 1} moving forward {num} spaces from bonus card.",
                                 'is_initial_move': False,
-                                'delay': 0.5
+                                'delay': 0.8  # Increased from 0.5 to 0.8
                             }
                             player.active_animations.append(anim)
                         elif effect[0] == "move_back":
                             num = effect[1]
-                            if len(player.position_history) > num:
-                                target_pos = player.position_history[-num-1]
-                                movement_path = player.position_history[-1:-num-2:-1]
+                            if player.position > 0:
+                                # Calculate target position (at most back to start)
+                                target_pos = max(0, player.position - num)
+                                # Create movement path
+                                movement_path = [player.position]
+                                
+                                # If position is num or greater, go back num spaces
+                                if player.position >= num:
+                                    for i in range(1, num + 1):
+                                        movement_path.append(player.position - i)
+                                # Otherwise go back to the start
+                                else:
+                                    for i in range(1, player.position + 1):
+                                        movement_path.append(player.position - i)
+                                
+                                anim = {
+                                    'player': player,
+                                    'path': movement_path,
+                                    'index': 0,
+                                    'last_time': time.time(),
+                                    'message': f"Player {player.id + 1} moving back {num} spaces from bonus card.",
+                                    'is_backwards': True,
+                                    'delay': 0.8  # Increased from 0.5 to 0.8
+                                }
+                                player.active_animations.append(anim)
                             else:
-                                target_pos = 0
-                                movement_path = player.position_history[::-1] + [0] * (num - len(player.position_history) + 1)
-                            anim = {
-                                'player': player,
-                                'path': movement_path,
-                                'index': 0,
-                                'last_time': time.time(),
-                                'message': f"Player {player.id + 1} moving back {num} spaces from bonus card.",
-                                'is_backwards': True,
-                                'delay': 0.5
-                            }
-                            player.active_animations.append(anim)
+                                game_state['message'] = f"Player {player.id + 1} can't move back from the start."
                         elif effect[0] == "go_to_jail":
                             mac_os_uh_ohh_sound.play()
                             player.prev_position = player.position
@@ -1418,29 +1594,61 @@ def main():
                                 game_state['message'] = f"Player {player.id + 1} picks up a quiz card."
                 elif game_state['bonus_image_state'] == 'showing':
                     player = players[game_state['current_player']]
-                    if not player.active_animations and not game_state.get('show_quiz', False):
-                        game_state['bonus_image_state'] = 'shrinking'
-                        game_state['bonus_shrink_start'] = current_time
-                        disconnect_sound.play()
+                    
+                    # Check if the 2-second timer has expired
+                    if 'bonus_action_start_time' in game_state and current_time - game_state['bonus_action_start_time'] >= 2.0:
+                        # Start shrinking if animations not active or if it's a quiz and the quiz is not showing
+                        if (not player.active_animations or 
+                            (game_state['bonus_action'][0] == "pick_quiz" and not game_state.get('show_quiz', False))):
+                            game_state['bonus_image_state'] = 'shrinking'
+                            game_state['bonus_shrink_start'] = current_time
+                            disconnect_sound.play()
+                            if 'bonus_shrink_delay' in game_state:
+                                del game_state['bonus_shrink_delay']
+                    # Only process the original bonus card logic if we haven't already triggered shrinking
+                    elif not player.active_animations and not game_state.get('show_quiz', False):
+                        # Add a delay before shrinking based on bonus action
+                        if 'bonus_shrink_delay' not in game_state:
+                            # If the bonus action was pick_quiz, wait 0.5 seconds after quiz closes
+                            if game_state['bonus_action'][0] == "pick_quiz":
+                                # If the quiz has been completed, we can shrink the bonus card
+                                if game_state.get('quiz_from_bonus_completed', False):
+                                    game_state['bonus_shrink_delay'] = current_time + 0.5
+                                    # Clear the flag since we're handling it
+                                    del game_state['quiz_from_bonus_completed']
+                            else:
+                                game_state['bonus_shrink_delay'] = current_time + 2.0  # Changed from 3.0 to 2.0
+                        elif current_time >= game_state['bonus_shrink_delay']:
+                            game_state['bonus_image_state'] = 'shrinking'
+                            game_state['bonus_shrink_start'] = current_time
+                            disconnect_sound.play()
+                            del game_state['bonus_shrink_delay']
                 elif game_state['bonus_image_state'] == 'shrinking':
                     elapsed = current_time - game_state['bonus_shrink_start']
                     if elapsed >= 1.0:
                         del game_state['bonus_image_key']
                         del game_state['bonus_image_state']
                         del game_state['bonus_action']
+                        # Clear the processing_bonus_card flag when the bonus card animation is complete
+                        game_state['processing_bonus_card'] = False
 
-            if not animations_active and not game_state.get('show_quiz', False) and not game_state.get('show_path_choice_after_roll', False) and not game_state.get('rolling_dice', False) and 'movement_delay_start' not in game_state:
+            # Handle CPU player turns
+            if not animations_active and not game_state.get('show_quiz', False) and not game_state.get('show_path_choice_after_roll', False) and not game_state.get('rolling_dice', False) and 'movement_delay_start' not in game_state and not game_state.get('processing_bonus_card', False):
                 current_player = players[game_state['current_player']]
                 if current_player.is_computer and not current_player.has_rolled and not current_player.finished:
+                    # Check if player is in jail first
                     if current_player.in_jail:
                         message, moved = move_player(current_player, game_state)
                         game_state['message'] = message
+                    # Check if current position has path choices
                     elif isinstance(next_positions[current_player.position], list):
-                        choices = next_positions[current_player.position]
-                        choice = random.choice(choices)
                         message, moved = move_player(current_player, game_state)
                         game_state['message'] = message
-                        remaining_spaces = game_state.get('spaces_remaining', 0)
+                        game_state['spaces_remaining'] = game_state['dice_roll']  # Set remaining spaces to full roll
+                        choices = next_positions[current_player.position]
+                        choice = random.choice(choices)
+                        remaining_spaces = game_state['spaces_remaining']
+                        current_player.path_choices[current_player.position] = choice
                         movement_path = get_movement_path_with_choice(current_player.position, choice, remaining_spaces)
                         anim = {
                             'player': current_player,
@@ -1456,10 +1664,14 @@ def main():
                         game_state['show_path_choice_after_roll'] = False
                         if 'roll_for_path_choice' in game_state:
                             del game_state['roll_for_path_choice']
+                        if 'spaces_remaining' in game_state:
+                            del game_state['spaces_remaining']
                         current_player.has_rolled = True
                     else:
+                        # Always roll and move for any other square (including B and Q)
                         message, moved = move_player(current_player, game_state)
                         game_state['message'] = message
+                        
                 elif current_player.finished:
                     current_player.has_rolled = False
                     current_player.turn_ended = False
@@ -1472,6 +1684,185 @@ def main():
                     game_state['current_player'] = (game_state['current_player'] + 1) % len(players)
                     while players[game_state['current_player']].finished and len(game_state['finish_order']) < len(players):
                         game_state['current_player'] = (game_state['current_player'] + 1) % len(players)
+            
+            # Check if a bonus card animation has just completed and clear the processing flag
+            if not game_state.get('bonus_image_state') and game_state.get('processing_bonus_card'):
+                game_state['processing_bonus_card'] = False
+                
+            # Handle CPU players automatically answering quiz cards
+            if game_state.get('show_quiz', False) and 'quiz_buttons' in game_state:
+                current_player = players[game_state['current_player']]
+                if current_player.is_computer:
+                    # Add a slight delay before CPU answers the quiz to make the game feel more natural
+                    if 'cpu_quiz_delay' not in game_state:
+                        game_state['cpu_quiz_delay'] = time.time() + 1.0  # 1 second delay
+                    elif time.time() > game_state['cpu_quiz_delay']:
+                        # CPU player makes a choice based on difficulty
+                        _, _, correct = game_state['quiz_question']
+                        is_correct = False
+                        
+                        # Determine if CPU gets answer correct based on difficulty
+                        if current_player.difficulty == 'easy':
+                            is_correct = random.random() < 0.3  # 30% chance to get it right
+                        elif current_player.difficulty == 'normal':
+                            is_correct = random.random() < 0.5  # 50% chance to get it right
+                        elif current_player.difficulty == 'hard':
+                            is_correct = random.random() < 0.7  # 70% chance to get it right
+                        else:
+                            is_correct = random.random() < 0.5  # Default 50% chance
+                        
+                        # Select the option index for the CPU (correct or random incorrect)
+                        selected_option = correct if is_correct else random.choice([i for i in range(len(game_state['quiz_buttons'])) if i != correct])
+                        
+                        # Add splash effect tracking
+                        game_state['clicked_quiz_button'] = selected_option
+                        game_state['button_click_time'] = time.time()
+                        
+                        # Wait a moment to let the splash effect be visible before applying the effect
+                        game_state['cpu_splash_delay'] = time.time() + 0.2  # 0.2 second delay to show splash
+                        game_state['cpu_splash_option'] = selected_option
+                        game_state['cpu_splash_is_correct'] = is_correct
+                        
+                        # Remove the CPU quiz delay after it's used
+                        del game_state['cpu_quiz_delay']
+                    
+                    # Check if we need to apply the quiz effect after showing the splash effect
+                    if 'cpu_splash_delay' in game_state and time.time() > game_state['cpu_splash_delay']:
+                        is_correct = game_state['cpu_splash_is_correct']
+                        
+                        if is_correct:
+                            # Apply quiz effect for correct answer
+                            game_state['message'] = f"Player {current_player.id + 1} answered correctly!"
+                            mac_os_dinbg_sound.play()
+                            game_state['quiz_state'] = 'answered'
+                            game_state['quiz_answer_delay_start'] = time.time()
+                            if 'quiz_buttons' in game_state:
+                                del game_state['quiz_buttons']
+                            
+                            # Explicitly set both flags to ensure turn ends
+                            current_player.turn_ended = True
+                            current_player.has_rolled = True
+                            
+                            # If this quiz came from a bonus card, mark it completed
+                            if game_state.get('processing_bonus_card', False):
+                                game_state['quiz_from_bonus_completed'] = True
+                        else:
+                            # For wrong answers, use the regular function
+                            apply_quiz_effect(current_player, False, game_state, scale)
+                        
+                        # Remove the splash delay after it's used
+                        del game_state['cpu_splash_delay']
+                        del game_state['cpu_splash_option']
+                        del game_state['cpu_splash_is_correct']
+
+            # Handle CPU players making path choices automatically
+            if game_state.get('show_path_choice_after_roll', False) and 'path_buttons' in game_state:
+                current_player = players[game_state['current_player']]
+                if current_player.is_computer:
+                    if 'cpu_path_delay' not in game_state:
+                        game_state['cpu_path_delay'] = time.time() + 0.8  # 0.8 second delay
+                    elif time.time() > game_state['cpu_path_delay']:
+                        # Get available choices
+                        choices = next_positions[current_player.position]
+                        choice = random.choice(choices)
+                        
+                        # Find the index of the choice in the path_buttons
+                        for i, (_, btn_choice) in enumerate(game_state['path_buttons']):
+                            if btn_choice == choice:
+                                # Add splash effect tracking for path buttons
+                                game_state['clicked_path_button'] = i
+                                game_state['path_button_click_time'] = time.time()
+                                break
+                        
+                        # Wait a moment to let the splash effect be visible before applying the choice
+                        game_state['cpu_path_splash_delay'] = time.time() + 0.2  # 0.2 second delay to show splash
+                        game_state['cpu_path_splash_choice'] = choice
+                        
+                        # Remove the CPU path choice delay after it's used
+                        del game_state['cpu_path_delay']
+                
+                # Check if we need to apply the path choice after showing the splash effect
+                if 'cpu_path_splash_delay' in game_state and time.time() > game_state['cpu_path_splash_delay']:
+                    choice = game_state['cpu_path_splash_choice']
+                    
+                    # Apply chosen path
+                    remaining_spaces = game_state.get('spaces_remaining', 0)
+                    current_player.path_choices[current_player.position] = choice
+                    movement_path = get_movement_path_with_choice(current_player.position, choice, remaining_spaces)
+                    anim = {
+                        'player': current_player,
+                        'path': movement_path,
+                        'index': 0,
+                        'last_time': time.time(),
+                        'message': f"Player {current_player.id + 1} (CPU) chose path to {choice}. Moving {remaining_spaces} spaces.",
+                        'is_initial_move': True,
+                        'delay': 0.5
+                    }
+                    current_player.active_animations.append(anim)
+                    indigogo_sound.play()
+                    game_state['show_path_choice_after_roll'] = False
+                    del game_state['path_buttons']
+                    if 'roll_for_path_choice' in game_state:
+                        del game_state['roll_for_path_choice']
+                    if 'spaces_remaining' in game_state:
+                        del game_state['spaces_remaining']
+                    current_player.has_rolled = True
+                    
+                    # Remove the splash delay after it's used
+                    del game_state['cpu_path_splash_delay']
+                    del game_state['cpu_path_splash_choice']
+
+            # Extra check to ensure turn ends properly after a CPU player completes a quiz from a bonus card
+            if not game_state.get('show_quiz', False) and game_state.get('quiz_from_bonus_completed', False) and game_state.get('processing_bonus_card', False):
+                current_player = players[game_state['current_player']]
+                if current_player.is_computer:
+                    # Make sure the player's turn will end
+                    current_player.turn_ended = True
+                    current_player.has_rolled = True
+                    
+                    # If the bonus card is done processing, clear both flags
+                    if not game_state.get('bonus_image_state'):
+                        game_state['processing_bonus_card'] = False
+                        del game_state['quiz_from_bonus_completed']
+
+            # Handle CPU players automatically handling bonus cards
+            if 'bonus_image_state' in game_state and game_state['bonus_image_state'] == 'showing':
+                current_player = players[game_state['current_player']]
+                if current_player.is_computer:
+                    # Check if we've hit the 2-second bonus action timer
+                    if 'bonus_action_start_time' in game_state and time.time() - game_state['bonus_action_start_time'] >= 2.0:
+                        # For "pick_quiz" bonus action, we need to wait until the quiz is complete
+                        if game_state['bonus_action'][0] != "pick_quiz" or not game_state.get('show_quiz', False):
+                            # Start the bonus action (the actions themselves are already handled in the bonus_image_state section)
+                            # We just need to trigger the shrinking animation to complete the bonus card process
+                            game_state['bonus_image_state'] = 'shrinking'
+                            game_state['bonus_shrink_start'] = time.time()
+                            
+                            # Remove the CPU bonus delay if it exists
+                            if 'cpu_bonus_delay' in game_state:
+                                del game_state['cpu_bonus_delay']
+                            
+                            # Make sure has_rolled is set to true to ensure turn ends properly
+                            current_player.has_rolled = True
+                    # Otherwise, use the standard CPU delay logic
+                    elif 'cpu_bonus_delay' not in game_state:
+                        game_state['cpu_bonus_delay'] = time.time() + 1.5  # Increased to 1.5 seconds delay
+                    elif time.time() > game_state['cpu_bonus_delay']:
+                        # For "pick_quiz" bonus action, we need to wait until the quiz is complete
+                        if game_state['bonus_action'][0] == "pick_quiz" and game_state.get('show_quiz', False):
+                            # Wait for quiz to finish
+                            pass
+                        else:
+                            # Start the bonus action (the actions themselves are already handled in the bonus_image_state section)
+                            # We just need to trigger the shrinking animation to complete the bonus card process
+                            game_state['bonus_image_state'] = 'shrinking'
+                            game_state['bonus_shrink_start'] = time.time()
+                            
+                            # Remove the CPU bonus delay after it's used
+                            del game_state['cpu_bonus_delay']
+                            
+                            # Make sure has_rolled is set to true to ensure turn ends properly
+                            current_player.has_rolled = True
 
             draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, bonus_result_images_scaled)
             pygame.display.flip()
