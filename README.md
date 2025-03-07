@@ -3,7 +3,7 @@
 ## Game Rules
 1. Players roll a single die to move
    
-3. Landing spots effects:
+2. Landing spots effects:
    - Forward 1: Move forward one space
    - Back 2 spaces: Move back two spaces
    - Safe space: No effect
@@ -11,15 +11,15 @@
    - Bonus card (B): Draw Bonus card
    - Quiz card (Q): Draw Quiz card
 
-4. Jail Escape: Must roll an even number on turn to exit
+3. Jail Escape: Must roll an even number on turn to exit
 
-5. Quiz Cards:
+4. Quiz Cards:
    - Correct answer: Stay on space
    - Incorrect answer: Move back two spaces
 
-6. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
+5. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
 
-7. Turn ends once a player:
+6. Turn ends once a player:
    - Lands on a safe space
    - Answers a quiz card correctly
    - Escapes jail
