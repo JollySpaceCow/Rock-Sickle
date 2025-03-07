@@ -223,18 +223,63 @@ squares = [
     'F'
 ]
 next_positions = list(range(1, 23)) + [[23, 30]] + list(range(24, 30)) + [37] + list(range(31, 37)) + [37] + [None]
+
+# Define a small gap between squares (represents 1mm)
+GAP_BETWEEN_TILES = 1  # Pixels representing ~1mm gap - reduced from 3 to 1
+
+# Modified squares_coords with gaps between adjacent tiles
 squares_coords = [
-    (50, 50), (100, 50), (150, 50), (200, 50), (250, 50), (300, 50), (350, 50), (400, 50), (450, 50), (500, 50),
-    (500, 100), (500, 150), (500, 200), (500, 250), (500, 300), (500, 350), (500, 400),
-    (450, 400), (400, 400), (350, 400), (300, 400), (250, 400), (200, 400),
-    (200, 350), (200, 300), (150, 300), (100, 300), (50, 300), (50, 250), (50, 200),
-    (150, 400), (100, 400), (50, 400), (50, 350), (50, 300), (50, 250), (50, 200),
-    (50, 130)
+    (50, 50),                                  # Go - corner
+    (100 + GAP_BETWEEN_TILES, 50),             # Horizontal row - top
+    (150 + 2*GAP_BETWEEN_TILES, 50),
+    (200 + 3*GAP_BETWEEN_TILES, 50),
+    (250 + 4*GAP_BETWEEN_TILES, 50),
+    (300 + 5*GAP_BETWEEN_TILES, 50),
+    (350 + 6*GAP_BETWEEN_TILES, 50),
+    (400 + 7*GAP_BETWEEN_TILES, 50),
+    (450 + 8*GAP_BETWEEN_TILES, 50),
+    (500 + 9*GAP_BETWEEN_TILES, 50),           # Corner
+    
+    (500 + 9*GAP_BETWEEN_TILES, 100 + GAP_BETWEEN_TILES),    # Vertical column - right
+    (500 + 9*GAP_BETWEEN_TILES, 150 + 2*GAP_BETWEEN_TILES),
+    (500 + 9*GAP_BETWEEN_TILES, 200 + 3*GAP_BETWEEN_TILES),
+    (500 + 9*GAP_BETWEEN_TILES, 250 + 4*GAP_BETWEEN_TILES),
+    (500 + 9*GAP_BETWEEN_TILES, 300 + 5*GAP_BETWEEN_TILES),
+    (500 + 9*GAP_BETWEEN_TILES, 350 + 6*GAP_BETWEEN_TILES),
+    (500 + 9*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),  # Corner
+    
+    (450 + 8*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),  # Horizontal row - bottom 
+    (400 + 7*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),
+    (350 + 6*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),
+    (300 + 5*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),
+    (250 + 4*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),
+    (200 + 3*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),
+    
+    (200 + 3*GAP_BETWEEN_TILES, 350 + 6*GAP_BETWEEN_TILES),  # Vertical column - central
+    (200 + 3*GAP_BETWEEN_TILES, 300 + 5*GAP_BETWEEN_TILES),
+    (150 + 2*GAP_BETWEEN_TILES, 300 + 5*GAP_BETWEEN_TILES),  # Horizontal row - central
+    (100 + GAP_BETWEEN_TILES, 300 + 5*GAP_BETWEEN_TILES),
+    (50, 300 + 5*GAP_BETWEEN_TILES),
+    (50, 250 + 4*GAP_BETWEEN_TILES),           # Vertical column - left (part 1)
+    (50, 200 + 3*GAP_BETWEEN_TILES),
+    
+    (150 + 2*GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),  # Another path from bottom
+    (100 + GAP_BETWEEN_TILES, 400 + 7*GAP_BETWEEN_TILES),
+    (50, 400 + 7*GAP_BETWEEN_TILES),           # Corner
+    (50, 350 + 6*GAP_BETWEEN_TILES),           # Vertical column - left (part 2) 
+    (50, 300 + 5*GAP_BETWEEN_TILES),
+    (50, 250 + 4*GAP_BETWEEN_TILES),
+    (50, 200 + 3*GAP_BETWEEN_TILES),
+    
+    (50, 130 + 2*GAP_BETWEEN_TILES - 5)            # Finish line (moved up by 5px instead of 10px)
 ]
 
-# Define constant positions for jail and die
-JAIL_POS = (425, 325)
-DIE_POS = (250, 175)
+# Update JAIL_POS to match the new spacing
+JAIL_POS = (425 + 7*GAP_BETWEEN_TILES, 325 + 5*GAP_BETWEEN_TILES)
+DIE_POS = (250 + 4*GAP_BETWEEN_TILES, 175 + 2*GAP_BETWEEN_TILES)
+
+# Define jail size (will be used for random positioning)
+JAIL_SIZE = 60  # Approximate size of jail square, will be scaled later
 
 # Updated Quiz and Bonus Cards
 quiz_cards = [
@@ -292,6 +337,8 @@ class Player:
         self.position_history = []
         self.active_animations = []
         self.path_choices = {}  # Store path choices for each choice point
+        self.jail_x, self.jail_y = None, None  # Store player-specific jail position
+        self.quiz_cards = 3
 
 def roll_die(difficulty=None):
     """Roll the die based on difficulty level."""
@@ -502,10 +549,16 @@ def apply_effect(player, square_type, game_state, scale):
     elif square_type == 'J':
         player.prev_position = player.position
         whiz_sound.play()
+        
+        # Calculate a random position within the jail bounds
+        jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+        jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+        random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
+        
         anim = {
             'player': player,
             'start_pos': (player.current_x, player.current_y),
-            'end_pos': JAIL_POS,
+            'end_pos': random_jail_pos,  # Use random position instead of center
             'steps': 60,
             'current_step': 0,
             'last_time': time.time(),
@@ -640,6 +693,9 @@ def update_animation(game_state, scale):
                         if anim.get('jail_action') == 'enter':
                             anim['player'].position = 10  # Jail position
                             anim['player'].in_jail = True
+                            # Store final random position for drawing
+                            anim['player'].jail_x = anim['player'].current_x
+                            anim['player'].jail_y = anim['player'].current_y
                         elif anim.get('jail_action') == 'exit':
                             # Sound is now played at animation start instead of completion
                             anim['player'].position = anim['player'].prev_position
@@ -848,13 +904,68 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
         screen.blit(jail_img, (jail_x - jail_img.get_width() // 2, 
                                jail_y - jail_img.get_height() // 2))
 
+    # Create a dictionary to track occupied positions and how many players are at each position
+    position_counts = {}
     for player in players:
         if not player.finished or player.position == len(squares) - 1:
+            key = None
             if player.in_jail:
-                x, y = jail_x, jail_y
+                key = "jail"
+            else:
+                # Use a tuple of player's position coordinates as the key
+                key = (player.current_x, player.current_y)
+            
+            if key in position_counts:
+                position_counts[key].append(player)
+            else:
+                position_counts[key] = [player]
+
+    # Draw players with offsets if multiple players are at the same position
+    for position, players_at_position in position_counts.items():
+        for idx, player in enumerate(players_at_position):
+            if player.in_jail:
+                # Use player-specific jail position if available, otherwise use center
+                if player.jail_x is not None and player.jail_y is not None:
+                    x = int(player.jail_x * scale + offset_x)
+                    y = int(player.jail_y * scale + offset_y)
+                else:
+                    # Generate random position if somehow not set
+                    jail_offset_x = random.randint(-int(JAIL_SIZE/3 * scale), int(JAIL_SIZE/3 * scale))
+                    jail_offset_y = random.randint(-int(JAIL_SIZE/3 * scale), int(JAIL_SIZE/3 * scale))
+                    x = jail_x + jail_offset_x
+                    y = jail_y + jail_offset_y
+                    # Store for consistency
+                    player.jail_x = (x - offset_x) / scale
+                    player.jail_y = (y - offset_y) / scale
             else:
                 x = int(player.current_x * scale + offset_x)
                 y = int(player.current_y * scale + offset_y)
+                
+                # Apply offset if there are multiple players at this position
+                if len(players_at_position) > 1:
+                    # Calculate offset based on index
+                    # First player stays centered, subsequent players get offset in a spiral pattern
+                    if idx > 0:
+                        # Offset amount (proportional to scale)
+                        offset_amount = int(10 * scale)
+                        
+                        # Simple pattern: down and right for 2nd player, other directions for more players
+                        if idx == 1:
+                            x += offset_amount
+                            y += offset_amount
+                        elif idx == 2:
+                            x -= offset_amount
+                            y += offset_amount
+                        elif idx == 3:
+                            x -= offset_amount
+                            y -= offset_amount
+                        else:
+                            # For more than 4 players, increase offset slightly for each additional player
+                            angle = 2 * math.pi * (idx / 4)
+                            distance = offset_amount * (1 + (idx // 4) * 0.5)
+                            x += int(math.cos(angle) * distance)
+                            y += int(math.sin(angle) * distance)
+            
             if player.is_computer:
                 img = cpu_image_scaled
             else:
@@ -1316,18 +1427,25 @@ def select_players():
 
 def resize_assets(scale):
     """Resize all game assets based on screen scale while maintaining aspect ratios where necessary."""
+    # Calculate slightly smaller tile size to account for the gaps
+    tile_size = int(50 * scale) - int(GAP_BETWEEN_TILES * scale * 0.3)  # Reduced factor from 0.5 to 0.3 for smaller gap
+    
     tile_images_scaled = {
-        key: pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale)))
+        key: pygame.transform.smoothscale(img, (tile_size, tile_size))
         for key, img in tile_images_original.items() if key not in ['F', 'Jail']
     }
     finish_rotated = pygame.transform.rotate(tile_images_original['F'], 90)
-    tile_images_scaled['F'] = pygame.transform.smoothscale(finish_rotated, (int(50 * scale), int(100 * scale)))
-    tile_images_scaled['Jail'] = pygame.transform.smoothscale(tile_images_original['Jail'], (int(75 * scale), int(75 * scale)))
+    tile_images_scaled['F'] = pygame.transform.smoothscale(finish_rotated, (tile_size, int(100 * scale) - int(GAP_BETWEEN_TILES * scale * 0.3)))
+    tile_images_scaled['Jail'] = pygame.transform.smoothscale(tile_images_original['Jail'], (int(75 * scale) - int(GAP_BETWEEN_TILES * scale * 0.3), int(75 * scale) - int(GAP_BETWEEN_TILES * scale * 0.3)))
+    
+    # Keep player tokens the same size
     player_images_scaled = [pygame.transform.smoothscale(img, (int(40 * scale), int(40 * scale))) for img in player_images_original]
     for img in player_images_scaled:
         img.set_alpha(191)
     cpu_image_scaled = pygame.transform.smoothscale(cpu_image_original, (int(40 * scale), int(40 * scale)))
     cpu_image_scaled.set_alpha(191)
+    
+    # Keep other game elements the same size
     dice_images_scaled = [pygame.transform.smoothscale(img, (int(50 * scale), int(50 * scale))) for img in dice_images_original]
     restart_button_scaled = pygame.transform.smoothscale(restart_button_original, (int(50 * scale), int(50 * scale)))
     
@@ -1566,21 +1684,28 @@ def main():
                                 game_state['message'] = f"Player {player.id + 1} can't move back from the start."
                         elif effect[0] == "go_to_jail":
                             mac_os_uh_ohh_sound.play()
+                            whiz_sound.play()  # Play the whiz sound for jail movement
                             player.prev_position = player.position
-                            whiz_sound.play()
+                            
+                            # Calculate a random position within the jail bounds
+                            jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+                            jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+                            random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
+                            
                             anim = {
                                 'player': player,
                                 'start_pos': (player.current_x, player.current_y),
-                                'end_pos': JAIL_POS,
+                                'end_pos': random_jail_pos,  # Use random position instead of center
                                 'steps': 60,
                                 'current_step': 0,
                                 'last_time': time.time(),
                                 'message': f"Player {player.id + 1} sent to jail by bonus card.",
                                 'is_jail_move': True,
-                                'delay': 0.0167,  # ~60fps (1/60 second)
+                                'delay': 0.0167,
                                 'jail_action': 'enter'
                             }
                             player.active_animations.append(anim)
+                            # No need to set turn_ended here, it will be set when animation completes
                         elif effect[0] == "pick_quiz":
                             if quiz_card_index < len(quiz_cards):
                                 question, options, correct = quiz_cards[quiz_card_index]
