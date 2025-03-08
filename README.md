@@ -44,7 +44,7 @@ Starting from "Go" and following the perimeter clockwise:
 - -2 = Go back two spaces
 - J = Go to Jail
 - B = Pick up a bonus card
-- Q = Pick up a bonus card
+- Q = Pick up a quiz card
 - F = Finish line
 
 ## Game Components
