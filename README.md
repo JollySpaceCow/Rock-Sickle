@@ -303,4 +303,4 @@ Expert Quiz Cards (20)
         It melts rocks into magma
         It exposes rocks to weathering and erosion ✓
         It compacts sediment into rock
-        It cools lava into igneous rock
+        It cools lava into igneous rock 
