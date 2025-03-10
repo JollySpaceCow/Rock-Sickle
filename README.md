@@ -74,7 +74,7 @@ Starting from "Go" and following the perimeter clockwise:
 14. Pick up a quiz card
 15. Pick up a quiz card
 
-### Quiz Cards (10)
+### Quiz Cards (12)
 1. Q: What type of rock can you find fossils in?
    A: Sedimentary
    * Granite
@@ -179,3 +179,128 @@ Starting from "Go" and following the perimeter clockwise:
 - Players are ordered in the victory area by who finished quicker
 - Game ends when all players reach the finish space
 - When playing with six players and everyone finishes, the credits roll
+
+## Expert Board
+
+
+Expert Quiz Cards (20)
+    Q: What process in the rock cycle is primarily responsible for transforming sedimentary rock into metamorphic rock?
+    A: Heat and pressure
+        Weathering
+        Melting
+        Compaction and cementation
+        Heat and pressure ✓
+    Q: Which factor most directly influences the rate of mineral crystallization in cooling magma?
+    A: The rate of cooling
+        The depth of the magma chamber
+        The rate of cooling ✓
+        The presence of water vapor
+        The color of the resulting rock
+    Q: In the context of the rock cycle, what is the primary source of energy driving the transformation of rocks?
+    A: Earth’s internal heat
+        Solar radiation
+        Earth’s internal heat ✓
+        Gravitational pull
+        Chemical reactions
+    Q: Which type of rock is most likely to form from the rapid cooling of lava on Earth’s surface?
+    A: Extrusive igneous
+        Sedimentary
+        Metamorphic
+        Intrusive igneous
+        Extrusive igneous ✓
+    Q: What process must occur for an igneous rock to become sediment?
+    A: Weathering and erosion
+        Subduction
+        Weathering and erosion ✓
+        Recrystallization
+        Partial melting
+    Q: Which condition is most essential for the formation of foliation in metamorphic rocks?
+    A: Directed pressure
+        High temperature
+        Directed pressure ✓
+        Rapid cooling
+        Chemical precipitation
+    Q: Why do sedimentary rocks often contain fossils while igneous rocks typically do not?
+    A: Igneous rocks form from molten material
+        Igneous rocks form too slowly
+        Sedimentary rocks form under high pressure
+        Igneous rocks form from molten material ✓
+        Sedimentary rocks are always older
+    Q: What is the primary mechanism by which clastic sedimentary rocks are formed?
+    A: Compaction and cementation of fragments
+        Evaporation of seawater
+        Compaction and cementation of fragments ✓
+        Recrystallization under heat
+        Cooling of magma
+    Q: Which rock type is most likely to undergo partial melting if subducted into the mantle?
+    A: Granite (igneous)
+        Granite (igneous) ✓
+        Limestone (sedimentary)
+        Slate (metamorphic)
+        Sandstone (sedimentary)
+    Q: How does the presence of water influence metamorphism?
+    A: It acts as a catalyst for chemical reactions
+        It increases the melting point of rocks
+        It acts as a catalyst for chemical reactions ✓
+        It prevents recrystallization
+        It slows down heat transfer
+    Q: What is the main difference between intrusive and extrusive igneous rocks?
+    A: Rate of cooling and crystal size
+        Mineral composition
+        Rate of cooling and crystal size ✓
+        Presence of fossils
+        Degree of foliation
+    Q: Which process in the rock cycle can lead directly to the formation of magma?
+    A: Melting
+        Weathering
+        Lithification
+        Melting ✓
+        Deposition
+    Q: Why are metamorphic rocks often found near tectonic plate boundaries?
+    A: They result from intense heat and pressure
+        They form from sediment deposition
+        They result from intense heat and pressure ✓
+        They cool rapidly at the surface
+        They are eroded from igneous rocks
+    Q: What type of rock is most likely to form from the evaporation of mineral-rich water?
+    A: Chemical sedimentary
+        Clastic sedimentary
+        Chemical sedimentary ✓
+        Foliated metamorphic
+        Extrusive igneous
+    Q: Which mineral property is most critical in determining how a rock responds to weathering?
+    A: Hardness
+        Hardness ✓
+        Color
+        Luster
+        Specific gravity
+    Q: How does subduction contribute to the rock cycle?
+    A: It recycles oceanic crust into magma
+        It recycles oceanic crust into magma ✓
+        It deposits sediment on the seafloor
+        It cools lava into extrusive rocks
+        It erodes mountains into sediment
+    Q: What is the primary reason that igneous rocks like basalt lack the layering seen in sedimentary rocks?
+    A: They crystallize from a molten state
+        They form from rapid sediment deposition
+        They crystallize from a molten state ✓
+        They are subjected to high pressure
+        They contain more water
+    Q: Which process can transform a metamorphic rock back into an igneous rock?
+    A: Melting and cooling
+        Erosion
+        Melting and cooling ✓
+        Compaction
+        Chemical weathering
+    Q: Why do some sedimentary rocks exhibit cross-bedding?
+    A: They are deposited by wind or water currents
+        They form under high heat
+        They are deposited by wind or water currents ✓
+        They recrystallize under pressure
+        They cool slowly underground
+    Q: What role does tectonic uplift play in the rock cycle?
+    A: It exposes rocks to weathering and erosion
+        It melts rocks into magma
+        It exposes rocks to weathering and erosion ✓
+        It compacts sediment into rock
+        It cools lava into igneous rock
