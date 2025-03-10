@@ -322,3 +322,10 @@ Starting from "Go" and following the perimeter clockwise:
     * It exposes rocks to weathering and erosion ✓
     * It compacts sediment into rock
     * It cools lava into igneous rock
+   
+21. Q: Who is "The Rock" in popular culture?
+    A: Dwayne Johnson
+    * Arnold Schwarzenegger
+    * Sylvester Stallone
+    * Dwayne Johnson ✓
+    * Mount Rushmore
