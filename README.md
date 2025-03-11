@@ -182,6 +182,24 @@ Starting from "Go" and following the perimeter clockwise:
 
 ## Expert Board
 
+###Bonus Cards - Expert (16)
+1. Go back two spaces
+2. Go back two spaces (Alt)
+3. Go back five spaces
+4. Go back five spaces (Alt)
+5. Move forward two spaces (1)
+6. Move forward two spaces (2)
+7. Move forward two spaces (3)
+8. Move forward two spaces (4)
+9. Move forward two spaces (5)
+10. Move forward two spaces (6)
+11. Move forward five spaces
+12. Go To Jail (1)
+13. Go To Jail (2)
+14. Go To Jail (3)
+15. Go To Jail (4)
+16. Get Out of Jail Free
+
 ### Quiz Cards (20)
 1. Q: What process in the rock cycle is primarily responsible for transforming sedimentary rock into metamorphic rock?
    A: Heat and pressure
