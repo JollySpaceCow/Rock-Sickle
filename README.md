@@ -182,7 +182,7 @@ Starting from "Go" and following the perimeter clockwise:
 
 ## Expert Board
 
-###Bonus Cards - Expert (16)
+### Bonus Cards - Expert (16)
 1. Go back two spaces
 2. Go back two spaces
 3. Go back five spaces
