@@ -1,0 +1,25 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+	<title>3 Players</title>
+	<defs>
+		<linearGradient id="g1" x2="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(1024,0,0,1024,0,512.01)">
+			<stop offset="0" stop-color="#97c755"/>
+			<stop offset="1" stop-color="#006900"/>
+		</linearGradient>
+		<radialGradient id="g2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(418.772,0,0,418.772,512,511.998)">
+			<stop offset="0" stop-color="#62de76"/>
+			<stop offset="1" stop-color="#009444"/>
+		</radialGradient>
+	</defs>
+	<style>
+		.s0 { fill: url(#g1) } 
+		.s1 { fill: url(#g2) } 
+		.s2 { fill: #00ff27 } 
+	</style>
+	<g>
+		<g>
+			<path fill-rule="evenodd" class="s0" d="m512 1024c-283.1 0-512-228.9-512-512 0-283.1 228.9-512 512-512 283.1 0 512 228.9 512 512 0 283.1-228.9 512-512 512z"/>
+			<path fill-rule="evenodd" class="s1" d="m512 930.8c-231.6 0-418.8-187.2-418.8-418.8 0-231.6 187.2-418.8 418.8-418.8 231.6 0 418.8 187.2 418.8 418.8 0 231.6-187.2 418.8-418.8 418.8z"/>
+			<path id="3" class="s2" aria-label="3"  d="m584 455.9q43 9.2 67.1 38.3 24.4 29.1 24.4 71.9 0 65.6-45.2 101.6-45.2 35.9-128.3 35.9-28 0-57.7-5.3-29.4-5.7-60.9-16.7v-57.9q25 14.6 54.7 22 29.7 7.4 62.1 7.4 56.4 0 85.8-22.3 29.7-22.2 29.7-64.7 0-39.2-27.6-61.2-27.3-22.3-76.3-22.3h-51.7v-49.3h54q44.3 0 67.8-17.6 23.4-17.8 23.4-51 0-34.2-24.3-52.3-24.1-18.5-69.2-18.5-24.7 0-52.9 5.4-28.2 5.3-62.1 16.6v-53.4q34.2-9.6 63.9-14.3 30-4.8 56.4-4.8 68.3 0 108.1 31.2 39.9 30.9 39.9 83.8 0 36.8-21.1 62.4-21.1 25.2-60 35.1z"/>
+		</g>
+	</g>
+</svg>
