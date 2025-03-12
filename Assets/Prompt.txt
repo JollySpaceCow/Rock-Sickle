@@ -1,4 +1,0 @@
-
-When the CPUs and human players land on the P square, the CPU behave has not intended and the humna players behave as intended. Repair the CPU code for when their turn starts on P (when they get stopped in their tracks, the behaviour is ok).
-
-Do not delete or break other code.
