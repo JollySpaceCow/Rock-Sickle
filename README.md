@@ -3,7 +3,7 @@
 ## Game Rules
 1. Players roll a single die to move
    
-3. Landing spots effects:
+2. Landing spots effects:
    - Forward 1: Move forward one space
    - Back 2 spaces: Move back two spaces
    - Safe space: No effect
@@ -11,15 +11,15 @@
    - Bonus card (B): Draw Bonus card
    - Quiz card (Q): Draw Quiz card
 
-4. Jail Escape: Must roll an even number on turn to exit
+3. Jail Escape: Must roll an even number on turn to exit
 
-5. Quiz Cards:
+4. Quiz Cards:
    - Correct answer: Stay on space
    - Incorrect answer: Move back two spaces
 
-6. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
+5. Chain Reactions: If movement from cards/spaces leads to new effect squares, those effects must also be followed
 
-7. Turn ends once a player:
+6. Turn ends once a player:
    - Lands on a safe space
    - Answers a quiz card correctly
    - Escapes jail
@@ -44,7 +44,7 @@ Starting from "Go" and following the perimeter clockwise:
 - -2 = Go back two spaces
 - J = Go to Jail
 - B = Pick up a bonus card
-- Q = Pick up a bonus card
+- Q = Pick up a quiz card
 - F = Finish line
 
 ## Game Components
@@ -74,7 +74,7 @@ Starting from "Go" and following the perimeter clockwise:
 14. Pick up a quiz card
 15. Pick up a quiz card
 
-### Quiz Cards (10)
+### Quiz Cards (11)
 1. Q: What type of rock can you find fossils in?
    A: Sedimentary
    * Granite
@@ -106,37 +106,37 @@ Starting from "Go" and following the perimeter clockwise:
    * Gneiss
    * Galena ✓
 
-7. Q: What type of rock is formed by pressure and heat?
+6. Q: What type of rock is formed by pressure and heat?
    A: Metamorphic
    * Metamorphic ✓
    * Igneous
 
-8. Q: Is air a rock?
+7. Q: Is air a rock?
    A: No
    * Yes
    * No ✓
 
-9. Q: What are the 3 main types of rock?
+8. Q: What are the 3 main types of rock?
    A: Sedimentary, Igneous, Metamorphic
    * Molten, Solid, Liquid
    * Smooth, Hard, Brittle
    * Adhesion, Mohs, Bead
    * Sedimentary, Igneous, Metamorphic ✓
 
-10. Q: What is your favorite flavor of math, true or false?
+9. Q: What is your favorite flavor of math, true or false?
    A: Left
    * Soup
    * Croissant
    * Anti-Arctician
    * Left ✓
 
-11. Q: What type of rock is formed in layers?
+10. Q: What type of rock is formed in layers?
     A: Sedimentary
     * Sedimentary ✓
     * When flowing water touches lava
     * Igneous
 
-12. Q: Which process turns sediment into rock?
+11. Q: Which process turns sediment into rock?
     A: Lithification
     * Weathering
     * Erosion
@@ -179,3 +179,196 @@ Starting from "Go" and following the perimeter clockwise:
 - Players are ordered in the victory area by who finished quicker
 - Game ends when all players reach the finish space
 - When playing with six players and everyone finishes, the credits roll
+
+## Expert Board
+
+### Bonus Cards - Expert (16)
+1. Go back two spaces
+2. Go back two spaces
+3. Go back five spaces
+4. Go back five spaces
+5. Move forward two spaces
+6. Move forward two spaces
+7. Move forward two spaces
+8. Move forward two spaces
+9. Move forward two spaces
+10. Move forward two spaces
+11. Move forward five spaces
+12. Go To Jail
+13. Go To Jail
+14. Go To Jail
+15. Go To Jail
+16. Get Out of Jail Free
+
+### Quiz Cards (20)
+1. Q: What process in the rock cycle is primarily responsible for transforming sedimentary rock into metamorphic rock?
+   A: Heat and pressure
+   * Weathering
+   * Melting
+   * Compaction and cementation
+   * Heat and pressure ✓
+
+2. Q: Which factor most directly influences the rate of mineral crystallization in cooling magma?
+   A: The rate of cooling
+   * The depth of the magma chamber
+   * The rate of cooling ✓
+   * The presence of water vapor
+   * The color of the resulting rock
+
+3. Q: In the context of the rock cycle, what is the primary source of energy driving the transformation of rocks?
+   A: Earth's internal heat
+   * Solar radiation
+   * Earth's internal heat ✓
+   * Gravitational pull
+   * Chemical reactions
+
+4. Q: Which type of rock is most likely to form from the rapid cooling of lava on Earth's surface?
+   A: Extrusive igneous
+   * Sedimentary
+   * Metamorphic
+   * Intrusive igneous
+   * Extrusive igneous ✓
+
+5. Q: What process must occur for an igneous rock to become sediment?
+   A: Weathering and erosion
+   * Subduction
+   * Weathering and erosion ✓
+   * Recrystallization
+   * Partial melting
+
+6. Q: Which condition is most essential for the formation of foliation in metamorphic rocks?
+   A: Directed pressure
+   * High temperature
+   * Directed pressure ✓
+   * Rapid cooling
+   * Chemical precipitation
+
+7. Q: Why do sedimentary rocks often contain fossils while igneous rocks typically do not?
+   A: Igneous rocks form from molten material
+   * Igneous rocks form too slowly
+   * Sedimentary rocks form under high pressure
+   * Igneous rocks form from molten material ✓
+   * Sedimentary rocks are always older
+
+8. Q: What is the primary mechanism by which clastic sedimentary rocks are formed?
+   A: Compaction and cementation of fragments
+   * Evaporation of seawater
+   * Compaction and cementation of fragments ✓
+   * Recrystallization under heat
+   * Cooling of magma
+
+9. Q: Which rock type is most likely to undergo partial melting if subducted into the mantle?
+   A: Granite (igneous)
+   * Granite (igneous) ✓
+   * Limestone (sedimentary)
+   * Slate (metamorphic)
+   * Sandstone (sedimentary)
+
+10. Q: How does the presence of water influence metamorphism?
+    A: It acts as a catalyst for chemical reactions
+    * It increases the melting point of rocks
+    * It acts as a catalyst for chemical reactions ✓
+    * It prevents recrystallization
+    * It slows down heat transfer
+
+11. Q: What is the main difference between intrusive and extrusive igneous rocks?
+    A: Rate of cooling and crystal size
+    * Mineral composition
+    * Rate of cooling and crystal size ✓
+    * Presence of fossils
+    * Degree of foliation
+
+12. Q: Which process in the rock cycle can lead directly to the formation of magma?
+    A: Melting
+    * Weathering
+    * Lithification
+    * Melting ✓
+    * Deposition
+
+13. Q: Why are metamorphic rocks often found near tectonic plate boundaries?
+    A: They result from intense heat and pressure
+    * They form from sediment deposition
+    * They result from intense heat and pressure ✓
+    * They cool rapidly at the surface
+    * They are eroded from igneous rocks
+
+14. Q: What type of rock is most likely to form from the evaporation of mineral-rich water?
+    A: Chemical sedimentary
+    * Clastic sedimentary
+    * Chemical sedimentary ✓
+    * Foliated metamorphic
+    * Extrusive igneous
+
+15. Q: Which mineral property is most critical in determining how a rock responds to weathering?
+    A: Hardness
+    * Hardness ✓
+    * Color
+    * Luster
+    * Specific gravity
+
+16. Q: How does subduction contribute to the rock cycle?
+    A: It recycles oceanic crust into magma
+    * It recycles oceanic crust into magma ✓
+    * It deposits sediment on the seafloor
+    * It cools lava into extrusive rocks
+    * It erodes mountains into sediment
+
+17. Q: What is the primary reason that igneous rocks like basalt lack the layering seen in sedimentary rocks?
+    A: They crystallize from a molten state
+    * They form from rapid sediment deposition
+    * They crystallize from a molten state ✓
+    * They are subjected to high pressure
+    * They contain more water
+
+18. Q: Which process can transform a metamorphic rock back into an igneous rock?
+    A: Melting and cooling
+    * Erosion
+    * Melting and cooling ✓
+    * Compaction
+    * Chemical weathering
+
+19. Q: Why do some sedimentary rocks exhibit cross-bedding?
+    A: They are deposited by wind or water currents
+    * They form under high heat
+    * They are deposited by wind or water currents ✓
+    * They recrystallize under pressure
+    * They cool slowly underground
+
+20. Q: What role does tectonic uplift play in the rock cycle?
+    A: It exposes rocks to weathering and erosion
+    * It melts rocks into magma
+    * It exposes rocks to weathering and erosion ✓
+    * It compacts sediment into rock
+    * It cools lava into igneous rock
+   
+21. Q: Who is "The Rock" in popular culture?
+    A: Dwayne Johnson
+    * Arnold Schwarzenegger
+    * Sylvester Stallone
+    * Dwayne Johnson ✓
+    * Mount Rushmore
+
+
+## Tmp Hardcore
+
+### Quiz Penalty
+Correct answer = Explosive is placed on a random square
+Wrong answer = Go back 4 spaces
+
+### Explosive
+If a player lands on a square with an explosive on it, they go boom and move back to the go square
+
+### Bonus Card Multiplication
+All negative effects from Bonus Cards are doubled
+"Go back 2 spaces" becomes "Go back 4 spaces"
+"Go back 5 spaces" becomes "Go back 10 spaces"
+"Go to Jail" cards also move you back 3 spaces before sending you to jail
+Positive effects remain unchanged, creating a significantly harsher risk/reward balance
+
+### Iron Jail
+Must roll exactly a 6 to escape jail
+Each failed escape attempt moves you one space closer to the start
+
+### Sudden Death Timer
+A 30-second sand timer for every decision (path choice, quiz answer)
+Failure to decide in time = move back to the go square
