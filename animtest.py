@@ -1,7 +1,7 @@
 import pygame
 import time
 
-# Initialize Pygame
+# Initialise Pygame
 pygame.init()
 
 # Original window size
