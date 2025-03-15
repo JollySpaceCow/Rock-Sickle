@@ -1,0 +1,93 @@
+# Rock-Sickle
+*Based on the original board game by Harrison and Sebastian (2020)*
+
+### Board Layout
+- Harrison
+
+### Rules
+- Harrison
+- Sebastian
+
+### Bonus Cards
+- Harrison
+
+### Quiz Cards
+- Harrison 
+- Sebastian
+
+### Play Testing
+- Harrison
+- Sebastian
+
+### Expert Board
+- Harrison
+- Luke
+- Sebastian
+
+### Rock-Sickle Inspiration
+- Mario Party 
+- Monopoly
+- Snakes and Ladders
+
+# The Digital Rock-Sickle
+
+### Scratch Concept
+Harrison
+
+### Expert Bonus Cards
+- Harrison
+
+### Expert Quiz Cards
+- Grok 3
+
+### Code
+- Claude 3.7 Sonnet
+- Grok 3
+
+### Image Art
+- Harrison
+
+### Pebble Background
+- John Salzarulo
+
+### Sound Design
+- Harrison
+
+### Audio Effects
+*Samples from:*
+- macOS 9
+- Pixabay
+- Scratch Library
+
+### Music
+- Suno v4
+
+### Play Testing
+- Harrison
+
+### Special Thanks To
+
+**Development Tools:**
+- Blender
+- Cursor
+- GitHub
+- Photopea
+- Pygame
+- Pyinstaller
+- Python
+- Scratch
+- Shotcut
+- Visual Studio Code
+- Windsurf
+
+**AI Troubleshooting Assistance:**
+- Claude
+- Grok
+
+**Distribution:**
+- Create DMG
+- Itch.io
+- Keka
+
+Thank you for playing
+
