@@ -26,6 +26,8 @@ restart_button_scaled = None
 settings_button_scaled = None
 bonus_result_images_scaled = {}
 bonus_images_scaled = {}
+cover_bonus_scaled = None
+cover_quiz_scaled = None
 board_image_scaled = None
 
 # Game progress file functions
@@ -300,9 +302,13 @@ try:
         new_img = pygame.Surface(img.get_size(), pygame.SRCALPHA, 32)
         new_img.blit(img, (0, 0))
         bonus_result_images_original[key] = new_img
-    logger.info("Original bonus result images loaded successfully as 32-bit surfaces")
+    # Load card covers for the flipping animation
+    cover_bonus_original = load_and_convert("Assets/Images/CardCovers/CoverBonus.png")
+    cover_quiz_original = load_and_convert("Assets/Images/CardCovers/CoverQuiz.png")
+    
+    logger.info("Original bonus result images and card covers loaded successfully as 32-bit surfaces")
 except Exception as e:
-    logger.error(f"Error loading bonus result images: {e}")
+    logger.error(f"Error loading bonus result images or card covers: {e}")
     traceback.print_exc(file=sys.stderr)
     sys.exit(1)
 
@@ -2863,76 +2869,170 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                         screen.blit(full_text, (current_x, current_y))
                         current_x += full_text.get_width()
 
-    # Draw bonus image
+    # Draw static card decks next to the die
+    die_center_x = int(DIE_POS[0] * scale + offset_x)
+    die_center_y = int(DIE_POS[1] * scale + offset_y)
+    
+    deck_scale_factor = 0.45  # Scale down the decks on the board
+    deck_offset = int(110 * scale)  # Distance from the die center
+    
+    # Static Bonus Deck (Left)
+    # Rotate 90 so the base faces the die (right)
+    bonus_deck_img = pygame.transform.smoothscale(cover_bonus_scaled, 
+                                                (int(cover_bonus_scaled.get_width() * deck_scale_factor), 
+                                                 int(cover_bonus_scaled.get_height() * deck_scale_factor)))
+    bonus_deck_rotated = pygame.transform.rotate(bonus_deck_img, 90)
+    bonus_deck_rect = bonus_deck_rotated.get_rect(center=(die_center_x - deck_offset, die_center_y))
+    screen.blit(bonus_deck_rotated, bonus_deck_rect.topleft)
+    
+    # Static Quiz Deck (Right)
+    # Rotate -90 so the base faces the die (left)
+    quiz_deck_img = pygame.transform.smoothscale(cover_quiz_scaled, 
+                                               (int(cover_quiz_scaled.get_width() * deck_scale_factor), 
+                                                int(cover_quiz_scaled.get_height() * deck_scale_factor)))
+    quiz_deck_rotated = pygame.transform.rotate(quiz_deck_img, -90)
+    quiz_deck_rect = quiz_deck_rotated.get_rect(center=(die_center_x + deck_offset, die_center_y))
+    screen.blit(quiz_deck_rotated, quiz_deck_rect.topleft)
+
+    # Helper for drawing card with shadow
+    def draw_card_with_shadow(surf, pos, rot, scale_val):
+        # Calculate shadow offset based on lift (scale_val)
+        shadow_offset = int(12 * scale * scale_val)
+        
+        # Create shadow surface
+        rotated_surf = pygame.transform.rotate(surf, rot)
+        shadow_surf = rotated_surf.copy()
+        shadow_surf.fill((0, 0, 0, 100), special_flags=pygame.BLEND_RGBA_MULT)
+        
+        # Draw shadow
+        shadow_rect = shadow_surf.get_rect(center=(pos[0] + shadow_offset, pos[1] + shadow_offset))
+        screen.blit(shadow_surf, shadow_rect.topleft)
+        
+        # Draw card
+        card_rect = rotated_surf.get_rect(center=pos)
+        screen.blit(rotated_surf, card_rect.topleft)
+
+    # Draw active bonus image
     if 'bonus_image_key' in game_state and 'bonus_image_state' in game_state:
         image = bonus_result_images_scaled[game_state['bonus_image_key']]
         state = game_state['bonus_image_state']
-        die_center_x = int(DIE_POS[0] * scale + offset_x)  # Die center X
-        die_center_y = int(DIE_POS[1] * scale + offset_y)  # Die center Y
         
         if state == 'growing':
             elapsed = time.time() - game_state['bonus_grow_start']
-            scale_factor = min(1.0, elapsed / 1.0)  # Grows over 1 second
-            scaled_width = int(image.get_width() * scale_factor)
-            scaled_height = int(image.get_height() * scale_factor)
-            scaled_image = pygame.transform.smoothscale(image, (scaled_width, scaled_height))
-            rect = scaled_image.get_rect(center=(die_center_x, die_center_y))
-            screen.blit(scaled_image, rect.topleft)
+            scale_factor = min(1.0, elapsed / 1.0)
+            rotation = 90 * (1.0 - scale_factor)
+            
+            start_x = die_center_x - deck_offset
+            current_x = start_x + (die_center_x - start_x) * scale_factor
+            current_y = die_center_y
+            
+            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
+            scaled_width = int(cover_bonus_scaled.get_width() * anim_scale)
+            scaled_height = int(cover_bonus_scaled.get_height() * anim_scale)
+            scaled_image = pygame.transform.smoothscale(cover_bonus_scaled, (scaled_width, scaled_height))
+            draw_card_with_shadow(scaled_image, (current_x, current_y), rotation, scale_factor)
+        elif state == 'flipping':
+            elapsed = time.time() - game_state['bonus_flip_start']
+            t = elapsed / 0.5
+            if t < 0.5:
+                width_scale = 1 - 2 * t
+                img = cover_bonus_scaled
+            else:
+                width_scale = 2 * (t - 0.5)
+                img = image
+            scaled_width = max(1, int(img.get_width() * width_scale))
+            scaled_image = pygame.transform.smoothscale(img, (scaled_width, img.get_height()))
+            draw_card_with_shadow(scaled_image, (die_center_x, die_center_y), 0, 1.0)
         elif state == 'showing':
-            # Full size, centered on die position
-            rect = image.get_rect(center=(die_center_x, die_center_y))
-            screen.blit(image, rect.topleft)
+            draw_card_with_shadow(image, (die_center_x, die_center_y), 0, 1.0)
+        elif state == 'flipping_back':
+            elapsed = time.time() - game_state['bonus_flip_back_start']
+            t = elapsed / 0.5
+            if t < 0.5:
+                width_scale = 1 - 2 * t
+                img = image
+            else:
+                width_scale = 2 * (t - 0.5)
+                img = cover_bonus_scaled
+            scaled_width = max(1, int(img.get_width() * width_scale))
+            scaled_image = pygame.transform.smoothscale(img, (scaled_width, img.get_height()))
+            draw_card_with_shadow(scaled_image, (die_center_x, die_center_y), 0, 1.0)
         elif state == 'shrinking':
             elapsed = time.time() - game_state['bonus_shrink_start']
-            scale_factor = max(0.0, 1.0 - elapsed / 1.0)  # Shrinks over 1 second
-            scaled_width = int(image.get_width() * scale_factor)
-            scaled_height = int(image.get_height() * scale_factor)
-            scaled_image = pygame.transform.smoothscale(image, (scaled_width, scaled_height))
-            rect = scaled_image.get_rect(center=(die_center_x, die_center_y))
-            screen.blit(scaled_image, rect.topleft)
+            scale_factor = max(0.0, 1.0 - elapsed / 1.0)
+            rotation = 90 * (1.0 - scale_factor)
+            
+            end_x = die_center_x - deck_offset
+            current_x = die_center_x + (end_x - die_center_x) * (1.0 - scale_factor)
+            current_y = die_center_y
+            
+            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
+            scaled_width = int(cover_bonus_scaled.get_width() * anim_scale)
+            scaled_height = int(cover_bonus_scaled.get_height() * anim_scale)
+            scaled_image = pygame.transform.smoothscale(cover_bonus_scaled, (scaled_width, scaled_height))
+            draw_card_with_shadow(scaled_image, (current_x, current_y), rotation, scale_factor)
 
     # Draw quiz last to ensure it's always on top
     if game_state.get('show_quiz', False) and game_state.get('quiz_question'):
         current_time = time.time()
         elapsed = current_time - game_state['quiz_start_time']
-        die_center_x = int(DIE_POS[0] * scale + offset_x)  # Die center X
-        die_center_y = int(DIE_POS[1] * scale + offset_y)  # Die center Y
         # Update quiz dimensions to match bonus cards with 4:3 aspect ratio
         quiz_width = int(280 * scale)  # Match bonus card width (same as in resize_assets)
         quiz_height = int(quiz_width * 3 / 4)  # 4:3 aspect ratio to match bonus cards
-
         if game_state['quiz_state'] == 'growing':
             scale_factor = min(1.0, elapsed / 1.0)
-            width = int(quiz_width * scale_factor)
-            height = int(quiz_height * scale_factor)
-            rect = pygame.Rect(die_center_x - width // 2, die_center_y - height // 2, width, height)
-            pygame.draw.rect(screen, WHITE, rect)
+            rotation = -90 * (1.0 - scale_factor)
             
-            # For growing state, we can optionally show the question with scaling
-            if scale_factor > 0.5 and 'quiz_question' in game_state:  # Only show text once the card is half-size
-                question = game_state['quiz_question'][0]
-                text_margin = int(10 * scale * scale_factor)
-                max_text_width = width - 2 * text_margin
-                # Use alpha to fade in text as the card grows
-                alpha_factor = min(1.0, (scale_factor - 0.5) * 2)  # 0 at 0.5 scale, 1.0 at 1.0 scale
-                render_wrapped_text(screen, font, question, max_text_width, 
-                                   rect.x + text_margin, rect.y + text_margin, 
-                                   BLACK)
-                
+            start_x = die_center_x + deck_offset
+            current_x = start_x + (die_center_x - start_x) * scale_factor
+            current_y = die_center_y
+            
+            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
+            width = int(quiz_width * anim_scale)
+            height = int(quiz_height * anim_scale)
+            
+            scaled_cover = pygame.transform.smoothscale(cover_quiz_scaled, (width, height))
+            draw_card_with_shadow(scaled_cover, (current_x, current_y), rotation, scale_factor)
+            
             if elapsed >= 1.0:
+                game_state['quiz_state'] = 'flipping'
+                game_state['quiz_flip_start'] = current_time
+        elif game_state['quiz_state'] == 'flipping':
+            elapsed_flip = current_time - game_state['quiz_flip_start']
+            t = elapsed_flip / 0.5
+            if t < 0.5:
+                width_scale = 1 - 2 * t
+                scaled_width = max(1, int(quiz_width * width_scale))
+                scaled_img = pygame.transform.smoothscale(cover_quiz_scaled, (scaled_width, quiz_height))
+                draw_card_with_shadow(scaled_img, (die_center_x, die_center_y), 0, 1.0)
+            else:
+                width_scale = 2 * (t - 0.5)
+                scaled_width = max(1, int(quiz_width * width_scale))
+                rect = pygame.Rect(die_center_x - scaled_width // 2, die_center_y - quiz_height // 2, scaled_width, quiz_height)
+                # Shadow for the white rectangle is simpler
+                shadow_offset = int(12 * scale)
+                shadow_rect = rect.copy()
+                shadow_rect.x += shadow_offset
+                shadow_rect.y += shadow_offset
+                pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
+                pygame.draw.rect(screen, WHITE, rect)
+            if elapsed_flip >= 0.5:
                 game_state['quiz_state'] = 'waiting'
                 game_state['quiz_timer'] = current_time + 1.0
         elif game_state['quiz_state'] == 'waiting':
             rect = pygame.Rect(die_center_x - quiz_width // 2, die_center_y - quiz_height // 2, quiz_width, quiz_height)
+            # Shadow
+            shadow_offset = int(12 * scale)
+            shadow_rect = rect.copy()
+            shadow_rect.x += shadow_offset
+            shadow_rect.y += shadow_offset
+            pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
             pygame.draw.rect(screen, WHITE, rect)
             question, options, _ = game_state['quiz_question']
-            
-            # Render wrapped question text
             text_margin = int(10 * scale)
             max_text_width = quiz_width - 2 * text_margin
             render_wrapped_text(screen, font, question, max_text_width, 
                                rect.x + text_margin, rect.y + text_margin)
-                
             if current_time >= game_state['quiz_timer']:
                 game_state['quiz_state'] = 'buttons'
                 game_state['pop_played'] = False
@@ -2941,119 +3041,115 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 pop_sound.play()
                 game_state['pop_played'] = True
             rect = pygame.Rect(die_center_x - quiz_width // 2, die_center_y - quiz_height // 2, quiz_width, quiz_height)
+            # Shadow
+            shadow_offset = int(12 * scale)
+            shadow_rect = rect.copy()
+            shadow_rect.x += shadow_offset
+            shadow_rect.y += shadow_offset
+            pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
             pygame.draw.rect(screen, WHITE, rect)
             question, options, _ = game_state['quiz_question']
-            
-            # Render wrapped question text
             text_margin = int(10 * scale)
             max_text_width = quiz_width - 2 * text_margin
             question_height = render_wrapped_text(screen, font, question, max_text_width, 
                                                 rect.x + text_margin, rect.y + text_margin)
-            
-            # Position buttons based on question height
             quiz_buttons = []
-            min_button_height = int(25 * scale)  # Minimum button height
+            min_button_height = int(25 * scale)
             button_spacing = int(5 * scale)
             button_start_y = rect.y + text_margin + question_height + button_spacing
             current_y = button_start_y
-            
-            # Calculate button positions with adequate spacing and adjust height based on text content
             for i, option in enumerate(options):
                 option_margin = int(5 * scale)
                 max_option_width = quiz_width - 2 * text_margin - 2 * option_margin
-                
-                # Check if text is long to determine if we need a smaller font
-                # Create a temporary surface to calculate text height without rendering
                 option_length = len(option)
-                
-                # Use smaller font for longer text
-                if option_length > 80:  # Very long text
+                if option_length > 80:
                     option_font = pygame.font.SysFont(None, int(14 * scale))
-                elif option_length > 50:  # Moderately long text
+                elif option_length > 50:
                     option_font = pygame.font.SysFont(None, int(16 * scale))
-                else:  # Normal text
+                else:
                     option_font = font
-                
-                # Pre-calculate text height using render_wrapped_text but without actually rendering
-                # (using a temporary surface that won't be displayed)
-                temp_surface = pygame.Surface((1, 1), pygame.SRCALPHA)  # Tiny temporary surface
+                temp_surface = pygame.Surface((1, 1), pygame.SRCALPHA)
                 text_height = render_wrapped_text(temp_surface, option_font, option, max_option_width, 0, 0, WHITE, return_height_only=True)
-                
-                # Set button height based on text height, with a minimum
                 button_height = max(min_button_height, text_height + 2 * option_margin)
-                
-                button = pygame.Rect(
-                    rect.x + text_margin,
-                    current_y,
-                    quiz_width - 2 * text_margin,
-                    button_height
-                )
-                current_y += button_height + button_spacing  # Update Y position for next button
-                
-                # Check if this button is currently being clicked (splash effect)
+                button = pygame.Rect(rect.x + text_margin, current_y, quiz_width - 2 * text_margin, button_height)
+                current_y += button_height + button_spacing
                 button_color = BLUE
                 if 'clicked_quiz_button' in game_state and game_state['clicked_quiz_button'] == i:
-                    # Get elapsed time since click
                     click_elapsed = current_time - game_state['button_click_time']
-                    if click_elapsed < 0.3:  # Show splash effect for 0.3 seconds
-                        # Change color for splash effect
-                        button_color = (100, 100, 200)  # Lighter blue for pressed effect
+                    if click_elapsed < 0.3:
+                        button_color = (100, 100, 200)
                     else:
-                        # Remove click effect after time elapsed
                         del game_state['clicked_quiz_button']
                         del game_state['button_click_time']
-                
                 pygame.draw.rect(screen, button_color, button)
-                
-                # Add number indicator for keyboard shortcuts (1, 2, 3, etc.)
-                number_text = f"{i+1}."  # i+1 to convert from 0-based to 1-based
+                number_text = f"{i+1}."
                 number_surface = option_font.render(number_text, True, YELLOW)
                 number_rect = number_surface.get_rect()
                 number_rect.left = button.x + option_margin
                 number_rect.top = button.y + option_margin
                 screen.blit(number_surface, number_rect)
-                
-                # Add padding to the button text to avoid overlapping with the number indicator
                 option_text_x = button.x + option_margin + number_surface.get_width() + 5
                 render_wrapped_text(screen, option_font, option, max_option_width - number_surface.get_width() - 5, 
                                    option_text_x, button.y + option_margin, WHITE)
-                
                 quiz_buttons.append((button, i))
             game_state['quiz_buttons'] = quiz_buttons
         elif game_state['quiz_state'] == 'answered':
             rect = pygame.Rect(die_center_x - quiz_width // 2, die_center_y - quiz_height // 2, quiz_width, quiz_height)
+            # Shadow
+            shadow_offset = int(12 * scale)
+            shadow_rect = rect.copy()
+            shadow_rect.x += shadow_offset
+            shadow_rect.y += shadow_offset
+            pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
             pygame.draw.rect(screen, WHITE, rect)
             question, _, _ = game_state['quiz_question']
-            
-            # Render wrapped question text
             text_margin = int(10 * scale)
             max_text_width = quiz_width - 2 * text_margin
             render_wrapped_text(screen, font, question, max_text_width, 
                                rect.x + text_margin, rect.y + text_margin)
-                
             if current_time - game_state['quiz_answer_delay_start'] >= 1.0:
+                game_state['quiz_state'] = 'flipping_back'
+                game_state['quiz_flip_back_start'] = current_time
+                disconnect_sound.play()
+        elif game_state['quiz_state'] == 'flipping_back':
+            elapsed_flip = current_time - game_state['quiz_flip_back_start']
+            t = elapsed_flip / 0.5
+            if t < 0.5:
+                width_scale = 1 - 2 * t
+                scaled_width = max(1, int(quiz_width * width_scale))
+                rect = pygame.Rect(die_center_x - scaled_width // 2, die_center_y - quiz_height // 2, scaled_width, quiz_height)
+                # Shadow
+                shadow_offset = int(12 * scale)
+                shadow_rect = rect.copy()
+                shadow_rect.x += shadow_offset
+                shadow_rect.y += shadow_offset
+                pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
+                pygame.draw.rect(screen, WHITE, rect)
+            else:
+                width_scale = 2 * (t - 0.5)
+                scaled_width = max(1, int(quiz_width * width_scale))
+                scaled_img = pygame.transform.smoothscale(cover_quiz_scaled, (scaled_width, quiz_height))
+                draw_card_with_shadow(scaled_img, (die_center_x, die_center_y), 0, 1.0)
+            if elapsed_flip >= 0.5:
                 game_state['quiz_state'] = 'shrinking'
                 game_state['quiz_shrink_start'] = current_time
-                disconnect_sound.play()
         elif game_state['quiz_state'] == 'shrinking':
-            elapsed = current_time - game_state['quiz_shrink_start']
-            scale_factor = max(0.0, 1.0 - elapsed / 1.0)
-            width = int(quiz_width * scale_factor)
-            height = int(quiz_height * scale_factor)
-            rect = pygame.Rect(die_center_x - width // 2, die_center_y - height // 2, width, height)
-            pygame.draw.rect(screen, WHITE, rect)
+            elapsed_shrink = current_time - game_state['quiz_shrink_start']
+            scale_factor = max(0.0, 1.0 - elapsed_shrink / 1.0)
+            rotation = -90 * (1.0 - scale_factor)
             
-            # Show fading text during shrinking
-            if scale_factor > 0.5 and 'quiz_question' in game_state:
-                question = game_state['quiz_question'][0]
-                text_margin = int(10 * scale * scale_factor)
-                max_text_width = width - 2 * text_margin
-                # Use alpha to fade out text as the card shrinks
-                render_wrapped_text(screen, font, question, max_text_width, 
-                                   rect.x + text_margin, rect.y + text_margin, 
-                                   BLACK)
-                
-            if elapsed >= 1.0:
+            end_x = die_center_x + deck_offset
+            current_x = die_center_x + (end_x - die_center_x) * (1.0 - scale_factor)
+            current_y = die_center_y
+            
+            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
+            width = int(quiz_width * anim_scale)
+            height = int(quiz_height * anim_scale)
+            
+            scaled_cover = pygame.transform.smoothscale(cover_quiz_scaled, (width, height))
+            draw_card_with_shadow(scaled_cover, (current_x, current_y), rotation, scale_factor)
+            
+            if elapsed_shrink >= 1.0:
                 game_state['show_quiz'] = False
                 del game_state['quiz_question']
                 del game_state['quiz_shrink_start']
@@ -3551,6 +3647,7 @@ def resize_assets(scale, board_type='Classic'):
     global player_images_scaled, cpu_image_scaled, bonus_result_images_scaled, cpu_difficulty_images_scaled
     global dice_images_scaled, tile_images_scaled, restart_button_scaled
     global bonus_images_scaled, settings_button_scaled, board_image_scaled
+    global cover_bonus_scaled, cover_quiz_scaled
     
     # Calculate slightly smaller tile size to account for the gaps
     # Different boards use different tile sizes
@@ -3631,6 +3728,10 @@ def resize_assets(scale, board_type='Classic'):
         key: pygame.transform.smoothscale(img, (target_width, target_height))
         for key, img in bonus_result_images_original.items()
     }
+    
+    # Scale card covers
+    cover_bonus_scaled = pygame.transform.smoothscale(cover_bonus_original, (target_width, target_height))
+    cover_quiz_scaled = pygame.transform.smoothscale(cover_quiz_original, (target_width, target_height))
     
     return tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, bonus_result_images_scaled
 
@@ -3980,12 +4081,19 @@ def main():
             if 'bonus_image_state' in game_state:
                 current_time = time.time()
                 if game_state['bonus_image_state'] == 'waiting':
-                    if current_time - game_state['bonus_image_start'] >= 0.8:  # Increased from 0.5 to 0.8
+                    if current_time - game_state['bonus_image_start'] >= 0.8:
                         game_state['bonus_image_state'] = 'growing'
                         game_state['bonus_grow_start'] = current_time
+                        game_state['bonus_flipped'] = False
                 elif game_state['bonus_image_state'] == 'growing':
                     elapsed = current_time - game_state['bonus_grow_start']
                     if elapsed >= 1.0:
+                        game_state['bonus_image_state'] = 'flipping'
+                        game_state['bonus_flip_start'] = current_time
+                        game_state['bonus_flipped'] = False
+                elif game_state['bonus_image_state'] == 'flipping':
+                    elapsed = current_time - game_state['bonus_flip_start']
+                    if elapsed >= 0.5:
                         game_state['bonus_image_state'] = 'showing'
                         # Start the bonus action
                         player = players[game_state['current_player']]
@@ -4004,22 +4112,17 @@ def main():
                                 'last_time': time.time(),
                                 'message': f"Player {player.id + 1} moving forward {num} spaces from bonus card.",
                                 'is_initial_move': False,
-                                'delay': 0.8  # Increased from 0.5 to 0.8
+                                'delay': 0.8
                             }
                             player.active_animations.append(anim)
                         elif effect[0] == "move_back":
                             num = effect[1]
                             if player.position > 0:
-                                # Calculate target position (at most back to start)
                                 target_pos = max(0, player.position - num)
-                                # Create movement path
                                 movement_path = [player.position]
-                                
-                                # If position is num or greater, go back num spaces
                                 if player.position >= num:
                                     for i in range(1, num + 1):
                                         movement_path.append(player.position - i)
-                                # Otherwise go back to the start
                                 else:
                                     for i in range(1, player.position + 1):
                                         movement_path.append(player.position - i)
@@ -4031,19 +4134,17 @@ def main():
                                     'last_time': time.time(),
                                     'message': f"Player {player.id + 1} moving back {num} spaces from bonus card.",
                                     'is_backwards': True,
-                                    'delay': 0.8  # Increased from 0.5 to 0.8
+                                    'delay': 0.8
                                 }
                                 player.active_animations.append(anim)
                             else:
                                 game_state['message'] = f"Player {player.id + 1} can't move back from the start."
                         elif effect[0] == "go_to_jail":
-                            # Set up a jail move
                             player.prev_position = player.position
                             player.jail_from_x = player.current_x
                             player.jail_from_y = player.current_y
                             player.jail_marker_anim_start = time.time()
                             
-                            # Calculate random position within jail bounds
                             jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
                             jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
                             random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
@@ -4058,49 +4159,45 @@ def main():
                                 'last_time': time.time(),
                                 'message': "Moving to jail.",
                                 'is_jail_move': True,
-                                'delay': 0.0167,  # ~60fps (1/60 second)
+                                'delay': 0.0167,
                                 'jail_action': 'enter'
                             }
                             player.active_animations.append(anim)
                         elif effect[0] == "jail_free":
-                            # Player gets a Get Out of Jail Free card
                             player.has_jail_free_card = True
                             game_state['message'] = f"Player {player.id + 1} got a Get Out of Jail Free card!"
-                            # No animation needed for jail_free effect
                         elif effect[0] == "pick_quiz":
-                            # Delay showing the quiz until after the bonus card animation finishes
                             game_state['pending_quiz'] = True
                 elif game_state['bonus_image_state'] == 'showing':
                     player = players[game_state['current_player']]
                     
-                    # Check if the 2-second timer has expired
                     if 'bonus_action_start_time' in game_state and current_time - game_state['bonus_action_start_time'] >= 2.0:
-                        # Start shrinking if animations not active or if it's a quiz and the quiz is not showing
                         if (not player.active_animations or 
                             (game_state['bonus_action'][0] == "pick_quiz" and not game_state.get('show_quiz', False))):
-                            game_state['bonus_image_state'] = 'shrinking'
-                            game_state['bonus_shrink_start'] = current_time
-                            disconnect_sound.play()
+                            game_state['bonus_image_state'] = 'flipping_back'
+                            game_state['bonus_flip_back_start'] = current_time
+                            game_state['bonus_flipped'] = False
                             if 'bonus_shrink_delay' in game_state:
                                 del game_state['bonus_shrink_delay']
-                    # Only process the original bonus card logic if we haven't already triggered shrinking
                     elif not player.active_animations and not game_state.get('show_quiz', False):
-                        # Add a delay before shrinking based on bonus action
                         if 'bonus_shrink_delay' not in game_state:
-                            # If the bonus action was pick_quiz, wait 0.5 seconds after quiz closes
                             if game_state['bonus_action'][0] == "pick_quiz":
-                                # If the quiz has been completed, we can shrink the bonus card
                                 if game_state.get('quiz_from_bonus_completed', False):
                                     game_state['bonus_shrink_delay'] = current_time + 0.5
-                                    # Clear the flag since we're handling it
                                     del game_state['quiz_from_bonus_completed']
                             else:
-                                game_state['bonus_shrink_delay'] = current_time + 2.0  # Changed from 3.0 to 2.0
+                                game_state['bonus_shrink_delay'] = current_time + 2.0
                         elif current_time >= game_state['bonus_shrink_delay']:
-                            game_state['bonus_image_state'] = 'shrinking'
-                            game_state['bonus_shrink_start'] = current_time
-                            disconnect_sound.play()
+                            game_state['bonus_image_state'] = 'flipping_back'
+                            game_state['bonus_flip_back_start'] = current_time
+                            game_state['bonus_flipped'] = False
                             del game_state['bonus_shrink_delay']
+                elif game_state['bonus_image_state'] == 'flipping_back':
+                    elapsed = current_time - game_state['bonus_flip_back_start']
+                    if elapsed >= 0.5:
+                        game_state['bonus_image_state'] = 'shrinking'
+                        game_state['bonus_shrink_start'] = current_time
+                        disconnect_sound.play()
                 elif game_state['bonus_image_state'] == 'shrinking':
                     elapsed = current_time - game_state['bonus_shrink_start']
                     if elapsed >= 1.0:
