@@ -1,2 +1,23 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS noise
 .DS_Store
-rock_sickle.log
+
+# Logs
+*.log
+
+# Scratch / one-off scripts
+scratch_*.py
+replace_script.py
+
+# Progress save (local only)
+rock_sickle_progress.json
