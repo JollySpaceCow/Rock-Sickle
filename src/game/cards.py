@@ -10,7 +10,7 @@ quiz_cards = [
     ("What type of rock is formed by pressure and heat?", ["Metamorphic", "Igneous"], 0),
     ("Is air a rock?", ["Yes", "No"], 1),
     ("What are the 3 main types of rock?", ["Molten, Solid, Liquid", "Smooth, Hard, Brittle", "Adhesion, Mohs, Bead", "Sedimentary, Igneous, Metamorphic"], 3),
-    ("What is your favorite flavor of math, true or false?", ["Soup", "Croissant", "Anti-Arctician", "Left"], 3),
+    ("What is your favourite flavour of math, true or false?", ["Soup", "Croissant", "Anti-Arctician", "Left"], 3),
     ("What type of rock is formed in layers?", ["Sedimentary", "When flowing water touches lava", "Igneous"], 0),
     ("Which process turns sediment into rock?", ["Weathering", "Erosion", "Lithification"], 2)
 ]
@@ -20,7 +20,7 @@ quiz_card_index = 0
 # Expert-level quiz cards that only appear on the expert board
 expert_quiz_cards = [
     ("What process in the rock cycle is primarily responsible for transforming sedimentary rock into metamorphic rock?", ["Weathering", "Melting", "Compaction and cementation", "Heat and pressure"], 3),
-    ("Which factor most directly influences the rate of mineral crystallization in cooling magma?", ["The depth of the magma chamber", "The rate of cooling", "The presence of water vapor", "The color of the resulting rock"], 1),
+    ("Which factor most directly influences the rate of mineral crystallisation in cooling magma?", ["The depth of the magma chamber", "The rate of cooling", "The presence of water vapor", "The colour of the resulting rock"], 1),
     ("In the context of the rock cycle, what is the primary source of energy driving the transformation of rocks?", ["Solar radiation", "Earth's internal heat", "Gravitational pull", "Chemical reactions"], 1),
     ("Which type of rock is most likely to form from the rapid cooling of lava on Earth's surface?", ["Sedimentary", "Metamorphic", "Intrusive igneous", "Extrusive igneous"], 3),
     ("What process must occur for an igneous rock to become sediment?", ["Subduction", "Weathering and erosion", "Recrystallization", "Partial melting"], 1),
@@ -33,11 +33,11 @@ expert_quiz_cards = [
     ("Which process in the rock cycle can lead directly to the formation of magma?", ["Weathering", "Lithification", "Melting", "Deposition"], 2),
     ("Why are metamorphic rocks often found near tectonic plate boundaries?", ["They form from sediment deposition", "They result from intense heat and pressure", "They cool rapidly at the surface", "They are eroded from igneous rocks"], 1),
     ("What type of rock is most likely to form from the evaporation of mineral-rich water?", ["Clastic sedimentary", "Chemical sedimentary", "Foliated metamorphic", "Extrusive igneous"], 1),
-    ("Which mineral property is most critical in determining how a rock responds to weathering?", ["Hardness", "Color", "Luster", "Specific gravity"], 0),
+    ("Which mineral property is most critical in determining how a rock responds to weathering?", ["Hardness", "Colour", "Luster", "Specific gravity"], 0),
     ("How does subduction contribute to the rock cycle?", ["It recycles oceanic crust into magma", "It deposits sediment on the seafloor", "It cools lava into extrusive rocks", "It erodes mountains into sediment"], 0),
-    ("What is the primary reason that igneous rocks like basalt lack the layering seen in sedimentary rocks?", ["They form from rapid sediment deposition", "They crystallize from a molten state", "They are subjected to high pressure", "They contain more water"], 1),
+    ("What is the primary reason that igneous rocks like basalt lack the layering seen in sedimentary rocks?", ["They form from rapid sediment deposition", "They crystallise from a molten state", "They are subjected to high pressure", "They contain more water"], 1),
     ("Which process can transform a metamorphic rock back into an igneous rock?", ["Erosion", "Melting and cooling", "Compaction", "Chemical weathering"], 1),
-    ("Why do some sedimentary rocks exhibit cross-bedding?", ["They form under high heat", "They are deposited by wind or water currents", "They recrystallize under pressure", "They cool slowly underground"], 1),
+    ("Why do some sedimentary rocks exhibit cross-bedding?", ["They form under high heat", "They are deposited by wind or water currents", "They recrystallise under pressure", "They cool slowly underground"], 1),
     ("What role does tectonic uplift play in the rock cycle?", ["It melts rocks into magma", "It exposes rocks to weathering and erosion", "It compacts sediment into rock", "It cools lava into igneous rock"], 1),
     ("Who is \"The Rock\" in popular culture?", ["Arnold Schwarzenegger", "Sylvester Stallone", "Dwayne Johnson", "Mount Rushmore"], 2)
 ]
