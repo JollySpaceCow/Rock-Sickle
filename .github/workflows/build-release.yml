@@ -32,7 +32,7 @@ jobs:
       - name: Upload DMG to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Rock Sickle.dmg
+          files: dist/Rock Sickle macOS.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -54,7 +54,7 @@ jobs:
       - name: Upload EXE to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Rock Sickle.exe
+          files: dist/Rock Sickle Windows.exe
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -84,7 +84,7 @@ jobs:
           cat > AppDir/AppRun << 'EOF'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "$0")")"
-          exec "$HERE/usr/bin/Rock Sickle" "$@"
+          exec "$HERE/usr/bin/Rock Sickle Linux" "$@"
           EOF
           chmod +x AppDir/AppRun
 
@@ -107,9 +107,9 @@ jobs:
 
       - name: Build AppImage
         run: |
-          APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir "dist/Rock Sickle.AppImage"
+          APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir "dist/Rock Sickle Linux.AppImage"
 
       - name: Upload AppImage to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Rock Sickle.AppImage
+          files: dist/Rock Sickle Linux.AppImage

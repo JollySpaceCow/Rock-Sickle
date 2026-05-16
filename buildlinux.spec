@@ -20,7 +20,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Rock Sickle',
+    name='Rock Sickle Linux',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

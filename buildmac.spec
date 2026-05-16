@@ -26,7 +26,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Rock Sickle',  # More user-friendly name with spaces
+    name='Rock Sickle Mac',  # More user-friendly name with spaces
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -71,7 +71,7 @@ def create_dmg():
     # Define paths
     app_path = os.path.join('dist', 'Rock Sickle.app')
     dist_dir = os.path.abspath('dist')
-    dmg_name = os.path.join(dist_dir, 'Rock Sickle.dmg')
+    dmg_name = os.path.join(dist_dir, 'Rock Sickle macOS.dmg')
     volume_name = 'Rock Sickle'
     dmg_icon_path = 'Assets/Images/Icons/StoneDrive.icns'
     
