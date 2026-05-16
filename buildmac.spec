@@ -73,7 +73,7 @@ def create_dmg():
     dist_dir = os.path.abspath('dist')
     dmg_name = os.path.join(dist_dir, 'Rock Sickle.dmg')
     volume_name = 'Rock Sickle'
-  dmg_icon_path = 'Assets/Images/Icons/StoneDrive.icns'
+    dmg_icon_path = 'Assets/Images/Icons/StoneDrive.icns'
     
     # Make sure paths exist
     print(f"Checking if app exists at: {app_path}")

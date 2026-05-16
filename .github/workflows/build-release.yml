@@ -53,7 +53,7 @@ jobs:
         with:
           files: dist/Rock Sickle.exe
 
-build-linux:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -71,7 +71,7 @@ build-linux:
           pip install pygame-ce pyinstaller
 
       - name: Build Linux binary
-        run: pyinstaller buildwin.spec
+        run: pyinstaller buildlinux.spec
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
