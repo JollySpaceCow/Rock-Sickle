@@ -57,7 +57,7 @@ jobs:
           files: dist/Rock Sickle.exe
 
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -76,7 +76,40 @@ jobs:
       - name: Build Linux binary
         run: pyinstaller buildlinux.spec
 
-      - name: Upload to release
+      - name: Set up AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp -r "dist/Rock Sickle/." AppDir/usr/bin/
+
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/Rock Sickle" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          cat > AppDir/rock-sickle.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Rock Sickle
+          Exec=Rock Sickle
+          Icon=rock-sickle
+          Type=Application
+          Categories=Game;
+          EOF
+
+          cp Assets/Images/Icons/RockSickle.png AppDir/rock-sickle.png
+
+      - name: Download appimagetool
+        run: |
+          wget -q -O appimagetool \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool
+
+      - name: Build AppImage
+        run: |
+          APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir "dist/Rock Sickle.AppImage"
+
+      - name: Upload AppImage to release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Rock Sickle
+          files: dist/Rock Sickle.AppImage

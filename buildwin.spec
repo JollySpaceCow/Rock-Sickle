@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='Rock Sickle',
+    name='Rock Sickle Windows',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
