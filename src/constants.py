@@ -14,6 +14,8 @@ GRAY = (128, 128, 128)
 PINK = (255, 192, 203)
 DULL_PINK = (219, 172, 183)  # A more muted pink for the expert board background
 DARK_GREY = (64, 64, 64)
+GOLD = (255, 215, 0)
+DARK_GREEN = (0, 100, 0)
 player_colours = [RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE]
 
 # Define a small gap between squares (represents 1mm)

@@ -11,18 +11,20 @@ import json
 
 from src.constants import (
     ORIGINAL_WIDTH, ORIGINAL_HEIGHT,
-    WHITE, BLACK, RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE, GRAY, PINK, DULL_PINK, DARK_GREY,
+    WHITE, BLACK, RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE, GRAY, PINK, DULL_PINK, DARK_GREY, GOLD, DARK_GREEN,
     player_colours,
     GAP_BETWEEN_TILES,
     CLASSIC_JAIL_POS, EXPERT_JAIL_POS, SECRET_JAIL_POS,
     DIE_POS, JAIL_SIZE
 )
-from src.core.progress import get_progress_file_path, load_game_progress, save_game_progress
+from src.core.progress import get_progress_file_path, load_game_progress, save_game_progress, increment_stat
 from src.core.assets import load_asset
 from src.game.board import (
     get_board_squares, get_classic_squares_coords, get_expert_squares_coords, get_secret_squares_coords
 )
 from src.game.player import Player
+from src.game.achievements import ACHIEVEMENTS, check_achievement_completion, get_achievement_by_id
+from src.ui.gallery import render_achievements_pane
 
 
 # Set up logging for debug purposes
@@ -41,11 +43,72 @@ dice_images_scaled = []
 tile_images_scaled = {}
 restart_button_scaled = None
 settings_button_scaled = None
+achievement_button_scaled = None
+magnify_button_scaled = None
 bonus_result_images_scaled = {}
 bonus_images_scaled = {}
 cover_bonus_scaled = None
 cover_quiz_scaled = None
 board_image_scaled = None
+
+def transform_coords(x, y, scale, game_state):
+    """Transform world coordinates to screen coordinates based on camera state."""
+    camera_zoom = game_state.get('camera_zoom', 1.0)
+    camera_focus_x = game_state.get('camera_focus_x', 400.0)
+    camera_focus_y = game_state.get('camera_focus_y', 300.0)
+    
+    # Position relative to focus point
+    rel_x = x - camera_focus_x
+    rel_y = y - camera_focus_y
+    
+    # Scale by camera zoom and window scale
+    screen_x = rel_x * camera_zoom * scale + SCREEN_WIDTH / 2
+    screen_y = rel_y * camera_zoom * scale + SCREEN_HEIGHT / 2
+    
+    return int(screen_x), int(screen_y)
+
+def update_camera_targets(game_state, players):
+    """Calculate target camera focus and zoom based on current mode."""
+    mode = game_state.get('camera_mode', 0)
+    
+    # Default values
+    target_zoom = 1.0
+    target_focus_x = 400.0 # Center of 800x600 board
+    target_focus_y = 300.0
+    
+    if mode == 1: # All Players
+        active_players = [p for p in players if not p.finished]
+        if active_players:
+            min_x = min(p.current_x for p in active_players)
+            max_x = max(p.current_x for p in active_players)
+            min_y = min(p.current_y for p in active_players)
+            max_y = max(p.current_y for p in active_players)
+            
+            target_focus_x = (min_x + max_x) / 2
+            target_focus_y = (min_y + max_y) / 2
+            
+            # Add padding
+            width = (max_x - min_x) + 200
+            height = (max_y - min_y) + 200
+            
+            # Calculate required zoom to fit this bounding box
+            zoom_x = 800 / max(1, width)
+            zoom_y = 600 / max(1, height)
+            target_zoom = min(zoom_x, zoom_y, 4.0) # Cap zoom at 4.0
+            target_zoom = max(target_zoom, 1.0) # Don't zoom out past 1.0
+        
+    elif mode == 2: # Current Player
+        cp_idx = game_state.get('current_player', 0)
+        if cp_idx < len(players):
+            cp = players[cp_idx]
+            target_focus_x = cp.current_x
+            target_focus_y = cp.current_y
+            target_zoom = 2.5 # Nice close up
+            
+    game_state['camera_target_zoom'] = target_zoom
+    game_state['camera_target_focus_x'] = target_focus_x
+    game_state['camera_target_focus_y'] = target_focus_y
+
 
 # Game progress functions moved to src.core.progress
 
@@ -82,12 +145,14 @@ try:
     def load_and_convert(path):
         """Load an image and convert it to 32-bit RGBA format for proper scaling"""
         img = pygame.image.load(load_asset(path))
-        return img.convert_alpha() if img.get_flags() & pygame.SRCALPHA else img.convert()
+        return img.convert_alpha()
     
     forward_one_original = load_and_convert("Assets/Images/Tiles/Forward One.png")
     back_two_original = load_and_convert("Assets/Images/Tiles/Back Two.png")
     restart_button_original = load_and_convert("Assets/Images/Tiles/Restart.png")
     settings_button_original = load_and_convert("Assets/Images/Tiles/Mr Geary.png")
+    achievement_button_original = load_and_convert("Assets/Images/Tiles/Target.png")
+    e_achievement_button_original = load_and_convert("Assets/Images/Tiles/eTarget.png")
     tile_images_original = {
         'Go': load_and_convert("Assets/Images/Tiles/Go.png"),
         '1_East': forward_one_original,
@@ -106,12 +171,6 @@ try:
         'F': load_and_convert("Assets/Images/Tiles/Finish.png"),
         'Jail': load_and_convert("Assets/Images/Tiles/Jail Location.png"),
     }
-    
-    # Load expert tile images - convert all to 32-bit RGBA surface format
-    def load_and_convert(path):
-        """Load an image and convert it to 32-bit RGBA format for proper scaling"""
-        img = pygame.image.load(load_asset(path))
-        return img.convert_alpha() if img.get_flags() & pygame.SRCALPHA else img.convert()
     
     e_forward_one_original = load_and_convert("Assets/Images/Tiles/eForward One.png")
     e_back_two_original = load_and_convert("Assets/Images/Tiles/eBack Two.png")
@@ -148,15 +207,18 @@ try:
     board_buttons = {
         'Classic': {
             'restart': restart_button_original,
-            'settings': settings_button_original
+            'settings': settings_button_original,
+            'achievement': achievement_button_original
         },
         'Expert': {
             'restart': e_restart_button_original,
-            'settings': e_settings_button_original
+            'settings': e_settings_button_original,
+            'achievement': e_achievement_button_original
         },
         'Secret': {
-            'restart': restart_button_original,  # Reuse Classic buttons for Secret board
-            'settings': settings_button_original
+            'restart': restart_button_original,
+            'settings': settings_button_original,
+            'achievement': achievement_button_original
         }
     }
     
@@ -175,7 +237,7 @@ try:
         "Assets/Images/Players/Player Blue.png",
         "Assets/Images/Players/Player Purple.png",
     ]
-    player_images_original = [pygame.image.load(load_asset(img)) for img in player_image_paths]
+    player_images_original = [load_and_convert(img) for img in player_image_paths]
     logger.info("Original player images loaded successfully")
 except Exception as e:
     logger.error(f"Error loading player images: {e}")
@@ -183,7 +245,7 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    cpu_image_original = pygame.image.load(load_asset("Assets/Images/Players/Player CPU.png"))
+    cpu_image_original = load_and_convert("Assets/Images/Players/Player CPU.png")
     logger.info("Original CPU image loaded successfully")
 except Exception as e:
     logger.error(f"Error loading CPU image: {e}")
@@ -192,7 +254,7 @@ except Exception as e:
 
 try:
     dice_images_original = [
-        pygame.image.load(load_asset(f"Assets/Images/Dices/{i}.png")) for i in range(1, 7)
+        load_and_convert(f"Assets/Images/Dices/{i}.png") for i in range(1, 7)
     ]
     logger.info("Original dice images loaded successfully")
 except Exception as e:
@@ -202,17 +264,17 @@ except Exception as e:
 
 try:
     difficulty_images_original = {
-        'easy': pygame.image.load(load_asset("Assets/Images/DifficultyButtons/1Baby.png")),
-        'normal': pygame.image.load(load_asset("Assets/Images/DifficultyButtons/3Consentrated.png")),
-        'hard': pygame.image.load(load_asset("Assets/Images/DifficultyButtons/4Angery.png")),
+        'easy': load_and_convert("Assets/Images/DifficultyButtons/1Baby.png"),
+        'normal': load_and_convert("Assets/Images/DifficultyButtons/3Consentrated.png"),
+        'hard': load_and_convert("Assets/Images/DifficultyButtons/4Angery.png"),
     }
     logger.info("Original difficulty images loaded successfully")
     
     # Load CPU difficulty images
     cpu_difficulty_images_original = {
-        'easy': pygame.image.load(load_asset("Assets/Images/Players/CPUEasy.png")),
-        'normal': pygame.image.load(load_asset("Assets/Images/Players/CPUNormal.png")),
-        'hard': pygame.image.load(load_asset("Assets/Images/Players/CPUHard.png")),
+        'easy': load_and_convert("Assets/Images/Players/CPUEasy.png"),
+        'normal': load_and_convert("Assets/Images/Players/CPUNormal.png"),
+        'hard': load_and_convert("Assets/Images/Players/CPUHard.png"),
     }
     logger.info("CPU difficulty images loaded successfully")
 except Exception as e:
@@ -258,10 +320,7 @@ try:
     }
     bonus_result_images_original = {}
     for key, path in bonus_result_paths.items():
-        img = pygame.image.load(load_asset(path))
-        new_img = pygame.Surface(img.get_size(), pygame.SRCALPHA, 32)
-        new_img.blit(img, (0, 0))
-        bonus_result_images_original[key] = new_img
+        bonus_result_images_original[key] = load_and_convert(path)
     # Load card covers for the flipping animation
     cover_bonus_original = load_and_convert("Assets/Images/CardCovers/CoverBonus.png")
     cover_quiz_original = load_and_convert("Assets/Images/CardCovers/CoverQuiz.png")
@@ -361,7 +420,7 @@ def apply_effect(player, square_type, game_state, scale):
             message = f"Player {player.id + 1} moves back 2 spaces."
             chain = True
     elif square_type == 'B':
-        if game_state.get('selected_board') == "Expert" and expert_cards.bonus_card_index < len(expert_cards.bonus_cards):
+        if game_state.get('selected_board') == "Expert" and cards.expert_bonus_card_index < len(cards.expert_bonus_cards):
             # Use expert bonus cards on the expert board
             # Allow picking another bonus card if:
             # 1. No bonus card animation is active, OR
@@ -371,8 +430,8 @@ def apply_effect(player, square_type, game_state, scale):
             can_pick_bonus = not game_state.get('bonus_image_key') or current_pos != last_bonus_pos
             
             if can_pick_bonus:
-                bonus = expert_cards.bonus_cards[expert_cards.bonus_card_index]
-                expert_cards.bonus_card_index = (expert_cards.bonus_card_index + 1) % len(expert_cards.bonus_cards)
+                bonus = cards.expert_bonus_cards[cards.expert_bonus_card_index]
+                cards.expert_bonus_card_index = (cards.expert_bonus_card_index + 1) % len(cards.expert_bonus_cards)
                 audio.drip_drop_sound.play()
                 effect = cards.parse_bonus_card(bonus)
                 image_key = cards.get_bonus_image_key(effect, "Expert")
@@ -395,6 +454,8 @@ def apply_effect(player, square_type, game_state, scale):
                 
                 # IMPORTANT: Don't end the player's turn yet
                 player.has_rolled = True
+                increment_stat("bonus_cards_picked")
+
             else:
                 # The player can't pick a new bonus card from the same position while actively processing one
                 message = f"Player {player.id + 1} must finish current bonus card first."
@@ -432,6 +493,8 @@ def apply_effect(player, square_type, game_state, scale):
                 
                 # IMPORTANT: Don't end the player's turn yet
                 player.has_rolled = True
+                increment_stat("bonus_cards_picked")
+
             else:
                 # The player can't pick a new bonus card from the same position while actively processing one
                 message = f"Player {player.id + 1} must finish current bonus card first."
@@ -442,16 +505,16 @@ def apply_effect(player, square_type, game_state, scale):
             player.has_rolled = True
     elif square_type == 'Q':
         # Determine which quiz deck to use based on the board type
-        if game_state.get('selected_board') == "Expert" and expert_cards.quiz_card_index < len(expert_cards.quiz_cards):
+        if game_state.get('selected_board') == "Expert" and cards.expert_quiz_card_index < len(cards.expert_quiz_cards):
             # Use expert quiz cards on the expert board
-            question, options, correct = expert_cards.quiz_cards[expert_cards.quiz_card_index]
+            question, options, correct = cards.expert_quiz_cards[cards.expert_quiz_card_index]
             game_state['quiz_question'] = (question, options, correct)
             game_state['show_quiz'] = True
             game_state['quiz_state'] = 'growing'
             game_state['quiz_start_time'] = time.time()
             game_state['pop_played'] = False
             audio.drum_machine_sound.play()
-            expert_cards.quiz_card_index = (expert_cards.quiz_card_index + 1) % len(expert_cards.quiz_cards)
+            cards.expert_quiz_card_index = (cards.expert_quiz_card_index + 1) % len(cards.expert_quiz_cards)
             message = f"Player {player.id + 1} faces an expert quiz."
         elif cards.quiz_card_index < len(cards.quiz_cards):
             # Use regular quiz cards on the classic board
@@ -496,6 +559,9 @@ def apply_effect(player, square_type, game_state, scale):
         player.active_animations.append(anim)
         message = f"Player {player.id + 1} sent to jail."
         player.turn_ended = True
+        
+        # Increment jail landings stat
+        increment_stat("jail_landings")
     elif square_type == 'P':
         message = f"Player {player.id + 1} chooses a path."
         # Check if the player has zero spaces remaining (ended their turn on the P square)
@@ -551,22 +617,52 @@ def apply_effect(player, square_type, game_state, scale):
                 fin_player.victory_scale_factor = 1.0
                 fin_player.active_animations.append(anim)
             
-            # Game completed - if this was the Classic board, unlock Expert board
-            # Update game progress
+            # Game completed - handle unlocks and progress
             game_progress = load_game_progress()
             
             # Increment completed games counter regardless of board type
             game_progress['completed_games'] = game_progress.get('completed_games', 0) + 1
             
+            # Update specific board completion flags
+            current_board = game_state.get('selected_board')
+            if current_board == 'Classic':
+                game_progress['classic_board_completed'] = True
+                if 'Expert' not in game_progress.get('unlocked_boards', ['Classic']):
+                    game_progress['unlocked_boards'].append('Expert')
+            elif current_board == 'Expert':
+                game_progress['expert_board_completed'] = True
+            elif current_board == 'Secret':
+                game_progress['secret_board_completed'] = True
+
             # Check if we should unlock the secret board (100+ completed games)
             if game_progress['completed_games'] >= 100 and 'Secret' not in game_progress.get('unlocked_boards', []):
                 game_progress['unlocked_boards'].append('Secret')
                 logger.info("Secret board unlocked!")
             
-            if game_state.get('selected_board') == 'Classic':
-                game_progress['classic_board_completed'] = True
-                if 'Expert' not in game_progress.get('unlocked_boards', ['Classic']):
-                    game_progress['unlocked_boards'].append('Expert')
+            # Check if a human player defeated a Hard CPU
+            winner = game_state['finish_order'][0]
+            if not winner.is_computer:
+                for p in game_state['players']:
+                    if p.is_computer and p.difficulty == 'hard':
+                        game_progress['stats']['hard_cpu_defeats'] = game_progress['stats'].get('hard_cpu_defeats', 0) + 1
+                        break
+            
+            # Check for newly completed achievements
+            newly_completed = check_achievement_completion(game_progress)
+            if newly_completed:
+                if 'completed_achievements' not in game_progress:
+                    game_progress['completed_achievements'] = []
+                
+                for a_id in newly_completed:
+                    game_progress['completed_achievements'].append(a_id)
+                    achievement = get_achievement_by_id(a_id)
+                    if achievement and "reward" in achievement:
+                        if 'unlocked_gallery_items' not in game_progress:
+                            game_progress['unlocked_gallery_items'] = []
+                        game_progress['unlocked_gallery_items'].append(achievement["reward"])
+                        logger.info(f"Achievement Accomplished: {achievement['title']}! Reward: {achievement['reward']}")
+                        # Also show on screen
+                        game_state['message'] = f"ACHIEVEMENT ACCOMPLISHED: {achievement['title']}!"
             
             save_game_progress(game_progress)
     elif square_type == 'Go':
@@ -629,6 +725,8 @@ def apply_quiz_effect(player, correct, game_state, scale):
     if correct:
         game_state['message'] = f"Player {player.id + 1} answered correctly!"
         audio.mac_os_dinbg_sound.play()
+        increment_stat("quiz_correct")
+
         player.turn_ended = True
         game_state['quiz_state'] = 'answered'
         game_state['quiz_answer_delay_start'] = time.time()
@@ -689,6 +787,36 @@ def update_animation(game_state, scale):
     # Special handling for victory cutscene animation
     if game_state.get('victory_cutscene', False):
         any_animations = True
+    
+    # Smoothly interpolate camera state
+    factor = 0.1 # Interpolation factor for smooth movement
+    
+    # Update camera zoom
+    current_zoom = game_state.get('camera_zoom', 1.0)
+    target_zoom = game_state.get('camera_target_zoom', 1.0)
+    if abs(current_zoom - target_zoom) > 0.001:
+        game_state['camera_zoom'] = current_zoom + (target_zoom - current_zoom) * factor
+        any_animations = True
+    else:
+        game_state['camera_zoom'] = target_zoom
+        
+    # Update camera focus
+    current_x = game_state.get('camera_focus_x', 400.0)
+    target_x = game_state.get('camera_target_focus_x', 400.0)
+    if abs(current_x - target_x) > 0.1:
+        game_state['camera_focus_x'] = current_x + (target_x - current_x) * factor
+        any_animations = True
+    else:
+        game_state['camera_focus_x'] = target_x
+        
+    current_y = game_state.get('camera_focus_y', 300.0)
+    target_y = game_state.get('camera_target_focus_y', 300.0)
+    if abs(current_y - target_y) > 0.1:
+        game_state['camera_focus_y'] = current_y + (target_y - current_y) * factor
+        any_animations = True
+    else:
+        game_state['camera_focus_y'] = target_y
+
     
     # Handle Free Parking effect animation
     if game_state.get('free_parking_effect', False):
@@ -862,14 +990,42 @@ def update_animation(game_state, scale):
 
 from src.ui.menus import toggle_player_state, cycle_difficulty
 from src.ui.renderer import format_time, get_player_position_text, render_player_text, display_player_timers, render_coloured_message, render_wrapped_text
-def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, bonus_result_images_scaled):
+def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, magnify_button_scaled, bonus_result_images_scaled):
     """Draw the game board and all its elements with card-flipping animations for button and squish for squares."""
+    camera_zoom = game_state.get('camera_zoom', 1.0)
+    
+    # Pre-scale tile images for the current camera zoom level if needed
+    if abs(camera_zoom - 1.0) > 0.001:
+        current_tile_images = {
+            key: pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
+            for key, img in tile_images_scaled.items()
+        }
+        current_player_images = [
+            pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
+            for img in player_images_scaled
+        ]
+        # Handle CPU images
+        current_cpu_difficulty_images = {
+            key: pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
+            for key, img in cpu_difficulty_images_scaled.items()
+        }
+        current_dice_images = [
+            pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
+            for img in dice_images_scaled
+        ]
+    else:
+        current_tile_images = tile_images_scaled
+        current_player_images = player_images_scaled
+        current_cpu_difficulty_images = cpu_difficulty_images_scaled
+        current_dice_images = dice_images_scaled
+
+
     # Use dull pink background for Expert board, gray for Classic
     if game_state.get('selected_board') == 'Expert':
         screen.fill(DULL_PINK)
     elif game_state.get('selected_board') == 'Secret':
         # Use a dark green background for the Secret board
-        screen.fill((0, 100, 0))  # Dark green
+        screen.fill(DARK_GREEN)
         
         # For Secret board, draw arrow connections between spaces to show direction
         # This ensures they appear underneath the tiles
@@ -878,10 +1034,9 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             
             # Draw arrows connecting each space to the next
             for i in range(len(squares_coords) - 1):
-                x1 = int(squares_coords[i][0] * scale + offset_x)
-                y1 = int(squares_coords[i][1] * scale + offset_y)
-                x2 = int(squares_coords[i+1][0] * scale + offset_x)
-                y2 = int(squares_coords[i+1][1] * scale + offset_y)
+                x1, y1 = transform_coords(squares_coords[i][0], squares_coords[i][1], scale, game_state)
+                x2, y2 = transform_coords(squares_coords[i+1][0], squares_coords[i+1][1], scale, game_state)
+
                 
                 # Calculate direction and length
                 dx = x2 - x1
@@ -938,8 +1093,9 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
         if i >= len(squares_coords):
             break
             
-        x = int(squares_coords[i][0] * scale + offset_x)
-        y = int(squares_coords[i][1] * scale + offset_y)
+        # Use camera transformation for tile position
+        x, y = transform_coords(squares_coords[i][0], squares_coords[i][1], scale, game_state)
+
 
         # No need for special handling of '1' spaces in Expert mode anymore
         # since the squares array now has the correct layout for each board
@@ -947,7 +1103,7 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
         
         # Determine the correct image for '1' and '-2' based on position
         if display_square in ['Go', 'B', 'Q', 'J', '0', 'P', 'F', 'FP']:
-            img = tile_images_scaled[display_square]
+            img = current_tile_images[display_square]
             
             # Store free parking info for later if this is the active free parking square
             if display_square == 'FP' and game_state.get('free_parking_effect', False) and i == game_state.get('free_parking_position', -1):
@@ -960,61 +1116,61 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             if game_state.get('selected_board') == 'Expert':
                 # First row (east direction) - indices 1-15
                 if 1 <= i <= 15:
-                    img = tile_images_scaled['1_East']
+                    img = current_tile_images['1_East']
                 # Right column (south direction) - indices 16-22
                 elif 16 <= i <= 22:
-                    img = tile_images_scaled['1_South']
+                    img = current_tile_images['1_South']
                 # Bottom rows going west - west path or south path west segments
                 elif (23 <= i <= 27) or (i >= 29 and i <= 37) or (i >= 52 and i <= 66):
-                    img = tile_images_scaled['1_West']
+                    img = current_tile_images['1_West']
                 # Vertical segments going north - end of paths
                 elif (i >= 38 and i <= 48) or (i >= 67 and i <= 77):
-                    img = tile_images_scaled['1_North']
+                    img = current_tile_images['1_North']
                 # Default east direction for any other segments
                 else:
-                    img = tile_images_scaled['1_East']
+                    img = current_tile_images['1_East']
             else:
                 # Original classic board logic
                 if i in [1, 6]:
-                    img = tile_images_scaled['1_East']
+                    img = current_tile_images['1_East']
                 elif i in [12, 14]:
-                    img = tile_images_scaled['1_North']
+                    img = current_tile_images['1_North']
                 elif i == 24:
-                    img = tile_images_scaled['1_West']
+                    img = current_tile_images['1_West']
                 elif i == 31:
-                    img = tile_images_scaled['1_West']
+                    img = current_tile_images['1_West']
                 else:
-                    img = tile_images_scaled['1_East']
+                    img = current_tile_images['1_East']
         elif display_square == '-2':
             # Check if we're on the expert board
             if game_state.get('selected_board') == 'Expert':
                 # First row (east direction) - should point west (opposite)
                 if 1 <= i <= 15:
-                    img = tile_images_scaled['-2_West']
+                    img = current_tile_images['-2_West']
                 # Right column (south direction) - should point north (opposite)
                 elif 16 <= i <= 22:
-                    img = tile_images_scaled['-2_North']
+                    img = current_tile_images['-2_North']
                 # Bottom rows going west - should point east (opposite)
                 elif (23 <= i <= 27) or (i >= 29 and i <= 37) or (i >= 52 and i <= 66):
-                    img = tile_images_scaled['-2_East']
+                    img = current_tile_images['-2_East']
                 # Vertical segments going north - should point south (opposite)
                 elif (i >= 38 and i <= 48) or (i >= 67 and i <= 77):
-                    img = tile_images_scaled['-2_South']
+                    img = current_tile_images['-2_South']
                 # Default west direction for any other segments (opposite of east)
                 else:
-                    img = tile_images_scaled['-2_West']
+                    img = current_tile_images['-2_West']
             else:
                 # Original classic board logic
                 if i == 4:
-                    img = tile_images_scaled['-2_West']
+                    img = current_tile_images['-2_West']
                 elif i in [13, 15]:
-                    img = tile_images_scaled['-2_South']
+                    img = current_tile_images['-2_South']
                 elif i == 19:
-                    img = tile_images_scaled['-2_East']
+                    img = current_tile_images['-2_East']
                 elif i in [28, 33, 35]:
-                    img = tile_images_scaled['-2_North']
+                    img = current_tile_images['-2_North']
                 else:
-                    img = tile_images_scaled['-2_West']
+                    img = current_tile_images['-2_West']
 
         tile_rect = pygame.Rect(x - img.get_width() // 2, 
                                 y - img.get_height() // 2, 
@@ -1081,14 +1237,17 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 # Draw car icons orbiting around the Free Parking space (not the player)
                 for j in range(4):
                     angle = progress * 4 * math.pi + (j * math.pi / 2)  # Rotate around center
-                    radius = 30 * scale * (0.8 + 0.2 * pulse)  # Pulsing radius
                     
-                    # Calculate position on the circle
-                    car_x = x + radius * math.cos(angle)
-                    car_y = y + radius * math.sin(angle)
+                    # Calculate position on the circle in world space
+                    target_car_x = squares_coords[i][0] + (30 * (0.8 + 0.2 * pulse)) * math.cos(angle)
+                    target_car_y = squares_coords[i][1] + (30 * (0.8 + 0.2 * pulse)) * math.sin(angle)
+                    
+                    car_x, car_y = transform_coords(target_car_x, target_car_y, scale, game_state)
+
                     
                     # Draw a car emoji (using a small yellow circle as placeholder)
-                    car_size = int(20 * scale * (0.8 + 0.2 * pulse))  # Increased from 15 to 20 for bigger circles
+                    car_size = int(20 * scale * camera_zoom * (0.8 + 0.2 * pulse))
+
                     car_surface = pygame.Surface((car_size, car_size), pygame.SRCALPHA)
                     # Increased opacity from 200 to 240 for more visibility
                     pygame.draw.circle(car_surface, (255, 255, 0, 240), (car_size//2, car_size//2), car_size//2)
@@ -1100,13 +1259,13 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                     screen.blit(car_surface, (car_x - car_size//2, car_y - car_size//2))
 
     # Draw jail with pulsing squish animation during restart
-    jail_x = int(JAIL_POS[0] * scale + offset_x)
-    jail_y = int(JAIL_POS[1] * scale + offset_y)
-    jail_img = tile_images_scaled['Jail']
+    jail_x, jail_y = transform_coords(JAIL_POS[0], JAIL_POS[1], scale, game_state)
+    jail_img = current_tile_images['Jail']
     jail_rect = pygame.Rect(jail_x - jail_img.get_width() // 2, 
                             jail_y - jail_img.get_height() // 2, 
                             jail_img.get_width(), 
                             jail_img.get_height())
+
     
     if 'fade_start' in game_state:
         fade_time = time.time() - game_state['fade_start']
@@ -1123,7 +1282,258 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
         screen.blit(jail_img, (jail_x - jail_img.get_width() // 2, 
                                jail_y - jail_img.get_height() // 2))
 
-    # Create a dictionary to track occupied positions and how many players are at each position
+    # ---------------------------------------------------------------------------
+    # Draw card decks, animated bonus card, and quiz BEFORE players so that
+    # players are always rendered on top of flying/sliding cards.
+    # ---------------------------------------------------------------------------
+
+    # Draw static card decks next to the die
+    die_pos_x, die_pos_y = DIE_POS
+    if game_state.get('selected_board') == 'Secret':
+        if 'die_pos' in game_state:
+            die_pos_x, die_pos_y = game_state['die_pos']
+            
+    die_center_x, die_center_y = transform_coords(die_pos_x + 25, die_pos_y + 25, scale, game_state) # Offset by half die size (50/2)
+
+
+
+    deck_scale_factor = 0.45 * camera_zoom  # Scale down the decks on the board
+    deck_offset = int(110 * scale * camera_zoom)  # Distance from the die center
+
+
+    # Static Bonus Deck (Left)
+    # Rotate 90 so the base faces the die (right)
+    bonus_deck_img = pygame.transform.smoothscale(cover_bonus_scaled,
+                                                (int(cover_bonus_scaled.get_width() * deck_scale_factor),
+                                                 int(cover_bonus_scaled.get_height() * deck_scale_factor)))
+    bonus_deck_rotated = pygame.transform.rotate(bonus_deck_img, 90)
+    bonus_deck_rect = bonus_deck_rotated.get_rect(center=(die_center_x - deck_offset, die_center_y))
+    screen.blit(bonus_deck_rotated, bonus_deck_rect.topleft)
+
+    # Static Quiz Deck (Right)
+    # Rotate -90 so the base faces the die (left)
+    quiz_deck_img = pygame.transform.smoothscale(cover_quiz_scaled,
+                                               (int(cover_quiz_scaled.get_width() * deck_scale_factor),
+                                                int(cover_quiz_scaled.get_height() * deck_scale_factor)))
+    quiz_deck_rotated = pygame.transform.rotate(quiz_deck_img, -90)
+    quiz_deck_rect = quiz_deck_rotated.get_rect(center=(die_center_x + deck_offset, die_center_y))
+    screen.blit(quiz_deck_rotated, quiz_deck_rect.topleft)
+
+    # ---------------------------------------------------------------------------
+    # Draw dice — Moved here to be below players (rendered later) and above
+    # static card decks (rendered above), but below active cards (rendered below).
+    # ---------------------------------------------------------------------------
+    # Draw dice - single die for classic board, two dice for expert
+    
+    die_screen_x, die_screen_y = transform_coords(die_pos_x, die_pos_y, scale, game_state)
+
+    dice_rect = pygame.Rect(die_screen_x, die_screen_y, int(50 * scale * camera_zoom), int(50 * scale * camera_zoom))
+    
+    # For expert board, define second die position and total text position
+    is_expert_board = game_state.get('selected_board') == 'Expert'
+    if is_expert_board:
+        dice_rect1 = pygame.Rect(die_screen_x - int(35 * scale * camera_zoom), die_screen_y, int(50 * scale * camera_zoom), int(50 * scale * camera_zoom))
+        dice_rect2 = pygame.Rect(die_screen_x + int(35 * scale * camera_zoom), die_screen_y, int(50 * scale * camera_zoom), int(50 * scale * camera_zoom))
+        total_text_pos = (die_screen_x, die_screen_y + int(60 * scale * camera_zoom))
+
+
+    
+    if game_state.get('rolling_dice', False):
+        if time.time() - game_state['dice_start_time'] < 1:
+            # Animation phase
+            if is_expert_board:
+                # For expert board, show two random dice during animation
+                for _ in range(2):  # Show multiple dice during animation
+                    dice_face = random.choice(current_dice_images)
+                    rand_x, rand_y = transform_coords(random.randint(100, ORIGINAL_WIDTH - 100), random.randint(100, ORIGINAL_HEIGHT - 100), scale, game_state)
+                    screen.blit(dice_face, (rand_x, rand_y))
+            else:
+                # Classic board - single die
+                dice_face = random.choice(current_dice_images)
+                rand_x, rand_y = transform_coords(random.randint(100, ORIGINAL_WIDTH - 100), random.randint(100, ORIGINAL_HEIGHT - 100), scale, game_state)
+                screen.blit(dice_face, (rand_x, rand_y))
+        else:
+            # End of animation, show final dice values
+            roll = game_state['dice_roll']
+            if is_expert_board:
+                # Expert board - display both dice and total
+                roll1 = game_state['dice_roll_1']
+                roll2 = game_state['dice_roll_2']
+                
+                # Draw first die
+                dice_face1 = current_dice_images[roll1 - 1]
+                screen.blit(dice_face1, dice_rect1.topleft)
+                
+                # Draw second die
+                dice_face2 = current_dice_images[roll2 - 1]
+                screen.blit(dice_face2, dice_rect2.topleft)
+                
+                # Draw total
+                total_font = pygame.font.SysFont(None, int(30 * scale * camera_zoom))
+                total_text = total_font.render(f"Total: {roll}", True, BLACK)
+                screen.blit(total_text, (total_text_pos[0] - total_text.get_width() // 2, total_text_pos[1]))
+                
+                # Store both dice values for later use
+                game_state['final_dice_roll_1'] = roll1
+                game_state['final_dice_roll_2'] = roll2
+                
+                # If doubles were rolled, play the special sound
+                if game_state.get('is_doubles') and not game_state.get('doubles_sound_played', False):
+                    # Play the Stylish sound for doubles
+                    stylish_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Stylish.opus"))
+                    stylish_sound.set_volume(0.5)  # Set to 50% volume to make it softer
+                    stylish_sound.play()
+                    game_state['doubles_sound_played'] = True
+            else:
+                # Classic board - single die
+                dice_face = current_dice_images[roll - 1]
+                screen.blit(dice_face, dice_rect.topleft)
+            
+            game_state['final_dice_roll'] = roll
+            game_state['movement_delay_start'] = time.time()
+            game_state['rolling_dice'] = False
+    elif 'movement_delay_start' in game_state:
+        current_time = time.time()
+        roll = game_state['dice_roll']
+        
+        if is_expert_board:
+            # Expert board - show both dice and total
+            roll1 = game_state.get('final_dice_roll_1', 1)
+            roll2 = game_state.get('final_dice_roll_2', 1)
+            
+            # Draw first die
+            dice_face1 = current_dice_images[roll1 - 1]
+            screen.blit(dice_face1, dice_rect1.topleft)
+            
+            # Draw second die
+            dice_face2 = current_dice_images[roll2 - 1]
+            screen.blit(dice_face2, dice_rect2.topleft)
+            
+            # Draw total
+            total_font = pygame.font.SysFont(None, int(30 * scale * camera_zoom))
+            total_text = total_font.render(f"Total: {roll}", True, BLACK)
+            screen.blit(total_text, (total_text_pos[0] - total_text.get_width() // 2, total_text_pos[1]))
+        else:
+            # Classic board - single die
+            dice_face = current_dice_images[roll - 1]
+            screen.blit(dice_face, dice_rect.topleft)
+
+        
+        if current_time - game_state['movement_delay_start'] >= 0.5:
+            del game_state['movement_delay_start']
+            current_player = players[game_state['current_player']]
+            current_player.position_history.append(current_player.position)
+            if current_player.in_jail:
+                # First check if player has a Get Out of Jail Free card
+                if current_player.has_jail_free_card:
+                    current_player.in_jail = False
+                    current_player.has_jail_free_card = False  # Use up the card
+                    # Clear the jail marker when player escapes jail
+                    current_player.jail_from_x = None
+                    current_player.jail_from_y = None
+                    current_player.jail_marker_anim_start = None
+                    
+                    anim = {
+                        'player': current_player,
+                        'start_pos': JAIL_POS,
+                        'end_pos': squares_coords[current_player.prev_position],
+                        'steps': 60,
+                        'current_step': 0,
+                        'last_time': time.time(),
+                        'message': f"Player {current_player.id + 1} used Get Out of Jail Free card!",
+                        'is_jail_move': True,
+                        'delay': 0.0167,  # ~60fps (1/60 second)
+                        'jail_action': 'exit'
+                    }
+                    # Play the sound when animation starts
+                    if current_player.is_computer:
+                        audio.head_shake_cpu_sound.play()
+                    else:
+                        audio.head_shake_sound.play()
+                    current_player.active_animations.append(anim)
+                    game_state['message'] = f"Player {current_player.id + 1} used Get Out of Jail Free card!"
+                    current_player.turn_ended = True
+                elif roll % 2 == 0:
+                    current_player.in_jail = False
+                    # Clear the jail marker when player escapes jail
+                    current_player.jail_from_x = None
+                    current_player.jail_from_y = None
+                    current_player.jail_marker_anim_start = None
+                    anim = {
+                        'player': current_player,
+                        'start_pos': JAIL_POS,
+                        'end_pos': squares_coords[current_player.prev_position],
+                        'steps': 60,
+                        'current_step': 0,
+                        'last_time': time.time(),
+                        'message': f"Player {current_player.id + 1} rolled {roll} (even). Escaping jail.",
+                        'is_jail_move': True,
+                        'delay': 0.0167,  # ~60fps (1/60 second)
+                        'jail_action': 'exit'
+                    }
+                    # Play the sound when animation starts
+                    if current_player.is_computer:
+                        audio.head_shake_cpu_sound.play()
+                    else:
+                        audio.head_shake_sound.play()
+                    current_player.active_animations.append(anim)
+                    current_player.turn_ended = True
+                else:
+                    audio.bonk_sound.play()
+                    game_state['message'] = f"Player {current_player.id + 1} rolled {roll} (odd). Still in jail."
+                    current_player.turn_ended = True
+            else:
+                if isinstance(next_positions[current_player.position], list):
+                    game_state['show_path_choice_after_roll'] = True
+                    game_state['roll_for_path_choice'] = roll
+                    game_state['spaces_remaining'] = roll  # Set remaining spaces to full roll
+                    game_state['message'] = f"Player {current_player.id + 1} rolled {roll}. Choose a path."
+                else:
+                    movement_path = get_movement_path(current_player.position, roll, game_state, squares, next_positions)
+                    anim = {
+                        'player': current_player,
+                        'path': movement_path,
+                        'index': 0,
+                        'last_time': time.time(),
+                        'message': f"Player {current_player.id + 1} rolled {roll}. Moving {roll} spaces.",
+                        'is_initial_move': True,
+                        'delay': 0.5
+                    }
+                    current_player.active_animations.append(anim)
+            current_player.has_rolled = True
+    elif 'final_dice_roll' in game_state:
+        if game_state.get('selected_board') == 'Expert':
+            # Expert board - show both dice and total
+            roll1 = game_state.get('final_dice_roll_1', 1)
+            roll2 = game_state.get('final_dice_roll_2', 1)
+            roll = game_state['final_dice_roll']
+            
+            # Define positions for expert board dice
+            dice_rect1 = pygame.Rect(int((die_pos_x - 35) * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
+            dice_rect2 = pygame.Rect(int((die_pos_x + 35) * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
+            total_text_pos = (int(die_pos_x * scale + offset_x), int((die_pos_y + 60) * scale + offset_y))  # Moved further down to avoid collision
+            
+            # Draw first die
+            dice_face1 = dice_images_scaled[roll1 - 1]
+            screen.blit(dice_face1, dice_rect1.topleft)
+            
+            # Draw second die
+            dice_face2 = dice_images_scaled[roll2 - 1]
+            screen.blit(dice_face2, dice_rect2.topleft)
+            
+            # Draw total
+            total_font = pygame.font.SysFont(None, int(30 * scale))
+            total_text = total_font.render(f"Total: {roll}", True, BLACK)
+            screen.blit(total_text, (total_text_pos[0] - total_text.get_width() // 2, total_text_pos[1]))
+        else:
+            # Classic board - single die
+            dice_face = dice_images_scaled[game_state['final_dice_roll'] - 1]
+            screen.blit(dice_face, dice_rect.topleft)
+
+
+
+
+
     position_counts = {}
     
     # Define current_player before drawing players
@@ -1149,64 +1559,58 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             if player.in_jail:
                 # Use player-specific jail position if available, otherwise use center
                 if player.jail_x is not None and player.jail_y is not None:
-                    x = int(player.jail_x * scale + offset_x)
-                    y = int(player.jail_y * scale + offset_y)
+                    x, y = transform_coords(player.jail_x, player.jail_y, scale, game_state)
                 else:
                     # Generate random position if somehow not set
-                    jail_offset_x = random.randint(-int(JAIL_SIZE/3 * scale), int(JAIL_SIZE/3 * scale))
-                    jail_offset_y = random.randint(-int(JAIL_SIZE/3 * scale), int(JAIL_SIZE/3 * scale))
-                    x = jail_x + jail_offset_x
-                    y = jail_y + jail_offset_y
-                    # Store for consistency
-                    player.jail_x = (x - offset_x) / scale
-                    player.jail_y = (y - offset_y) / scale
+                    jail_focus_x, jail_focus_y = JAIL_POS
+                    jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+                    jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+                    player.jail_x = jail_focus_x + jail_offset_x
+                    player.jail_y = jail_focus_y + jail_offset_y
+                    x, y = transform_coords(player.jail_x, player.jail_y, scale, game_state)
             else:
                 # Get base coordinates for the player
-                x = int(player.current_x * scale + offset_x)
-                y = int(player.current_y * scale + offset_y)
+                target_x = player.current_x
+                target_y = player.current_y
                 
                 # Special handling for GO square (position 0) to ensure player is centered
                 if player.position == 0:
-                    # Get the GO tile image to find its dimensions
-                    go_img = tile_images_scaled['Go']
-                    # Calculate the exact center of the GO tile
-                    x = int(squares_coords[0][0] * scale + offset_x)
-                    y = int(squares_coords[0][1] * scale + offset_y)
+                    target_x = squares_coords[0][0]
+                    target_y = squares_coords[0][1]
                 
                 # Apply offset if there are multiple players at this position
                 if len(players_at_position) > 1:
                     # Calculate offset based on index
                     # First player stays centered, subsequent players get offset in a spiral pattern
                     if idx > 0:
-                        # Offset amount (proportional to scale)
-                        offset_amount = int(10 * scale)
+                        # Offset amount (in world coordinates)
+                        offset_amount = 15
                         
                         # Simple pattern: down and right for 2nd player, other directions for more players
                         if idx == 1:
-                            x += offset_amount
-                            y += offset_amount
+                            target_x += offset_amount
+                            target_y += offset_amount
                         elif idx == 2:
-                            x -= offset_amount
-                            y += offset_amount
+                            target_x -= offset_amount
+                            target_y += offset_amount
                         elif idx == 3:
-                            x -= offset_amount
-                            y -= offset_amount
+                            target_x -= offset_amount
+                            target_y -= offset_amount
                         else:
                             # For more than 4 players, increase offset slightly for each additional player
                             angle = 2 * math.pi * (idx / 4)
                             distance = offset_amount * (1 + (idx // 4) * 0.5)
-                            x += int(math.cos(angle) * distance)
-                            y += int(math.sin(angle) * distance)
+                            target_x += math.cos(angle) * distance
+                            target_y += math.sin(angle) * distance
+                
+                x, y = transform_coords(target_x, target_y, scale, game_state)
             
             if player.is_computer:
                 # Use the correct CPU image based on difficulty level
-                if player.difficulty in cpu_difficulty_images_scaled:
-                    img = cpu_difficulty_images_scaled[player.difficulty]
-                else:
-                    # Fallback to normal difficulty if not recognized
-                    img = cpu_difficulty_images_scaled['normal']
+                img = current_cpu_difficulty_images.get(player.difficulty, current_cpu_difficulty_images.get('normal'))
             else:
-                img = player_images_scaled[player.colour_index]
+                img = current_player_images[player.colour_index]
+
             
             # Scale up players during victory cutscene
             if game_state.get('victory_cutscene', False) and player.finished:
@@ -1325,315 +1729,19 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
         if 'message' in game_state:
             render_coloured_message(screen, font, game_state['message'], int(50 * scale), int(500 * scale), offset_x, offset_y, players, player_colours)
 
-    # Draw dice - single die for classic board, two dice for expert
-    die_pos_x, die_pos_y = DIE_POS
-    
-    # For Secret board, use custom die position to avoid overlapping tiles
-    if game_state.get('selected_board') == 'Secret':
-        if 'die_pos' in game_state:
-            die_pos_x, die_pos_y = game_state['die_pos']
-    
-    dice_rect = pygame.Rect(int(die_pos_x * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
-    
-    # For expert board, define second die position and total text position
-    is_expert_board = game_state.get('selected_board') == 'Expert'
-    if is_expert_board:
-        dice_rect1 = pygame.Rect(int((die_pos_x - 35) * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
-        dice_rect2 = pygame.Rect(int((die_pos_x + 35) * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
-        total_text_pos = (int(die_pos_x * scale + offset_x), int((die_pos_y + 60) * scale + offset_y))  # Moved further down to avoid collision
-    
-    if game_state.get('rolling_dice', False):
-        if time.time() - game_state['dice_start_time'] < 1:
-            # Animation phase
-            if is_expert_board:
-                # For expert board, show two random dice during animation
-                for _ in range(2):  # Show multiple dice during animation
-                    dice_face = random.choice(dice_images_scaled)
-                    rand_x = int(random.randint(100, ORIGINAL_WIDTH - 100) * scale + offset_x)
-                    rand_y = int(random.randint(100, ORIGINAL_HEIGHT - 100) * scale + offset_y)
-                    screen.blit(dice_face, (rand_x, rand_y))
-            else:
-                # Classic board - single die
-                dice_face = random.choice(dice_images_scaled)
-                rand_x = int(random.randint(100, ORIGINAL_WIDTH - 100) * scale + offset_x)
-                rand_y = int(random.randint(100, ORIGINAL_HEIGHT - 100) * scale + offset_y)
-                screen.blit(dice_face, (rand_x, rand_y))
-        else:
-            # End of animation, show final dice values
-            roll = game_state['dice_roll']
-            if is_expert_board:
-                # Expert board - display both dice and total
-                roll1 = game_state['dice_roll_1']
-                roll2 = game_state['dice_roll_2']
-                
-                # Draw first die
-                dice_face1 = dice_images_scaled[roll1 - 1]
-                screen.blit(dice_face1, dice_rect1.topleft)
-                
-                # Draw second die
-                dice_face2 = dice_images_scaled[roll2 - 1]
-                screen.blit(dice_face2, dice_rect2.topleft)
-                
-                # Draw total
-                total_font = pygame.font.SysFont(None, int(30 * scale))
-                total_text = total_font.render(f"Total: {roll}", True, BLACK)
-                screen.blit(total_text, (total_text_pos[0] - total_text.get_width() // 2, total_text_pos[1]))
-                
-                # Store both dice values for later use
-                game_state['final_dice_roll_1'] = roll1
-                game_state['final_dice_roll_2'] = roll2
-                
-                # If doubles were rolled, play the special sound
-                if game_state.get('is_doubles') and not game_state.get('doubles_sound_played', False):
-                    # Play the Stylish sound for doubles
-                    stylish_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Stylish.opus"))
-                    stylish_sound.set_volume(0.5)  # Set to 50% volume to make it softer
-                    stylish_sound.play()
-                    game_state['doubles_sound_played'] = True
-            else:
-                # Classic board - single die
-                dice_face = dice_images_scaled[roll - 1]
-                screen.blit(dice_face, dice_rect.topleft)
-            
-            game_state['final_dice_roll'] = roll
-            game_state['movement_delay_start'] = time.time()
-            game_state['rolling_dice'] = False
-    elif 'movement_delay_start' in game_state:
-        current_time = time.time()
-        roll = game_state['dice_roll']
-        
-        if is_expert_board:
-            # Expert board - show both dice and total
-            roll1 = game_state.get('final_dice_roll_1', 1)
-            roll2 = game_state.get('final_dice_roll_2', 1)
-            
-            # Draw first die
-            dice_face1 = dice_images_scaled[roll1 - 1]
-            screen.blit(dice_face1, dice_rect1.topleft)
-            
-            # Draw second die
-            dice_face2 = dice_images_scaled[roll2 - 1]
-            screen.blit(dice_face2, dice_rect2.topleft)
-            
-            # Draw total
-            total_font = pygame.font.SysFont(None, int(30 * scale))
-            total_text = total_font.render(f"Total: {roll}", True, BLACK)
-            screen.blit(total_text, (total_text_pos[0] - total_text.get_width() // 2, total_text_pos[1]))
-        else:
-            # Classic board - single die
-            dice_face = dice_images_scaled[roll - 1]
-            screen.blit(dice_face, dice_rect.topleft)
-        
-        if current_time - game_state['movement_delay_start'] >= 0.5:
-            del game_state['movement_delay_start']
-            current_player = players[game_state['current_player']]
-            current_player.position_history.append(current_player.position)
-            if current_player.in_jail:
-                # First check if player has a Get Out of Jail Free card
-                if current_player.has_jail_free_card:
-                    current_player.in_jail = False
-                    current_player.has_jail_free_card = False  # Use up the card
-                    # Clear the jail marker when player escapes jail
-                    current_player.jail_from_x = None
-                    current_player.jail_from_y = None
-                    current_player.jail_marker_anim_start = None
-                    
-                    anim = {
-                        'player': current_player,
-                        'start_pos': JAIL_POS,
-                        'end_pos': squares_coords[current_player.prev_position],
-                        'steps': 60,
-                        'current_step': 0,
-                        'last_time': time.time(),
-                        'message': f"Player {current_player.id + 1} used Get Out of Jail Free card!",
-                        'is_jail_move': True,
-                        'delay': 0.0167,  # ~60fps (1/60 second)
-                        'jail_action': 'exit'
-                    }
-                    # Play the sound when animation starts
-                    if current_player.is_computer:
-                        audio.head_shake_cpu_sound.play()
-                    else:
-                        audio.head_shake_sound.play()
-                    current_player.active_animations.append(anim)
-                    game_state['message'] = f"Player {current_player.id + 1} used Get Out of Jail Free card!"
-                    current_player.turn_ended = True
-                elif roll % 2 == 0:
-                    current_player.in_jail = False
-                    # Clear the jail marker when player escapes jail
-                    current_player.jail_from_x = None
-                    current_player.jail_from_y = None
-                    current_player.jail_marker_anim_start = None
-                    anim = {
-                        'player': current_player,
-                        'start_pos': JAIL_POS,
-                        'end_pos': squares_coords[current_player.prev_position],
-                        'steps': 60,
-                        'current_step': 0,
-                        'last_time': time.time(),
-                        'message': f"Player {current_player.id + 1} rolled {roll} (even). Escaping jail.",
-                        'is_jail_move': True,
-                        'delay': 0.0167,  # ~60fps (1/60 second)
-                        'jail_action': 'exit'
-                    }
-                    # Play the sound when animation starts
-                    if current_player.is_computer:
-                        audio.head_shake_cpu_sound.play()
-                    else:
-                        audio.head_shake_sound.play()
-                    current_player.active_animations.append(anim)
-                    current_player.turn_ended = True
-                else:
-                    audio.bonk_sound.play()
-                    game_state['message'] = f"Player {current_player.id + 1} rolled {roll} (odd). Still in jail."
-                    current_player.turn_ended = True
-            else:
-                if isinstance(next_positions[current_player.position], list):
-                    game_state['show_path_choice_after_roll'] = True
-                    game_state['roll_for_path_choice'] = roll
-                    game_state['spaces_remaining'] = roll  # Set remaining spaces to full roll
-                    game_state['message'] = f"Player {current_player.id + 1} rolled {roll}. Choose a path."
-                else:
-                    movement_path = get_movement_path(current_player.position, roll, game_state, squares, next_positions)
-                    anim = {
-                        'player': current_player,
-                        'path': movement_path,
-                        'index': 0,
-                        'last_time': time.time(),
-                        'message': f"Player {current_player.id + 1} rolled {roll}. Moving {roll} spaces.",
-                        'is_initial_move': True,
-                        'delay': 0.5
-                    }
-                    current_player.active_animations.append(anim)
-            current_player.has_rolled = True
-    elif 'final_dice_roll' in game_state:
-        if game_state.get('selected_board') == 'Expert':
-            # Expert board - show both dice and total
-            roll1 = game_state.get('final_dice_roll_1', 1)
-            roll2 = game_state.get('final_dice_roll_2', 1)
-            roll = game_state['final_dice_roll']
-            
-            # Define positions for expert board dice
-            dice_rect1 = pygame.Rect(int((die_pos_x - 35) * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
-            dice_rect2 = pygame.Rect(int((die_pos_x + 35) * scale + offset_x), int(die_pos_y * scale + offset_y), int(50 * scale), int(50 * scale))
-            total_text_pos = (int(die_pos_x * scale + offset_x), int((die_pos_y + 60) * scale + offset_y))  # Moved further down to avoid collision
-            
-            # Draw first die
-            dice_face1 = dice_images_scaled[roll1 - 1]
-            screen.blit(dice_face1, dice_rect1.topleft)
-            
-            # Draw second die
-            dice_face2 = dice_images_scaled[roll2 - 1]
-            screen.blit(dice_face2, dice_rect2.topleft)
-            
-            # Draw total
-            total_font = pygame.font.SysFont(None, int(30 * scale))
-            total_text = total_font.render(f"Total: {roll}", True, BLACK)
-            screen.blit(total_text, (total_text_pos[0] - total_text.get_width() // 2, total_text_pos[1]))
-        else:
-            # Classic board - single die
-            dice_face = dice_images_scaled[game_state['final_dice_roll'] - 1]
-            screen.blit(dice_face, dice_rect.topleft)
 
-    # Draw path choice if active
-    if game_state.get('show_path_choice_after_roll', False):
-        current_player = players[game_state['current_player']]
-        current_pos = current_player.position
-        choices = next_positions[current_pos]
-        remaining_spaces = game_state.get('spaces_remaining', 0)
-        
-        # Show ghost players at potential end positions
-        for choice in choices:
-            # Calculate the full path for this choice including all remaining moves
-            full_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces, squares, next_positions)
-            ending_pos = full_path[-1]
-            
-            # Draw a ghost player at the ending position
-            x, y = squares_coords[ending_pos]
-            x = int(x * scale + offset_x)
-            y = int(y * scale + offset_y)
-            
-            # Draw a special marker for the end position
-            pygame.draw.circle(screen, (255, 255, 0), (x, y), int(20 * scale), 3)
-            
-            # Draw the ghost player
-            img = player_images_scaled[current_player.colour_index]
-            img_copy = img.copy()
-            img_copy.set_alpha(150)  # Increased transparency for better visibility
-            screen.blit(img_copy, (x - img_copy.get_width() // 2, y - img_copy.get_height() // 2))
-        
-        # Draw path choice dialog centered on die position
-        die_center_x = int(DIE_POS[0] * scale + offset_x)
-        die_center_y = int(DIE_POS[1] * scale + offset_y)
-        dialog_width = int(300 * scale)
-        dialog_height = int(180 * scale)
-        rect = pygame.Rect(die_center_x - dialog_width // 2, die_center_y - dialog_height // 2, dialog_width, dialog_height)
-        
-        # Draw dialog background with border
-        pygame.draw.rect(screen, WHITE, rect)
-        pygame.draw.rect(screen, (0, 0, 100), rect, 3)  # Dark blue border
-        
-        # Draw title with shadow
-        title_shadow = font.render(f"Choose Your Path!", True, (100, 100, 100))
-        screen.blit(title_shadow, (rect.x + int(12 * scale), rect.y + int(12 * scale)))
-        
-        title = font.render(f"Choose Your Path!", True, (0, 0, 150))  # Dark blue text
-        screen.blit(title, (rect.x + int(10 * scale), rect.y + int(10 * scale)))
-        
-        # Draw remaining spaces info
-        spaces_text = font.render(f"Remaining Spaces: {remaining_spaces}", True, (100, 0, 0))  # Red text for visibility
-        screen.blit(spaces_text, (rect.x + int(10 * scale), rect.y + int(40 * scale)))
-        
-        labels = ["North", "West"]
-        button_height = int(35 * scale)
-        button_spacing = int(15 * scale)
-        
-        game_state['path_buttons'] = []
-        
-        for i, (label, choice) in enumerate(zip(labels, choices)):
-            full_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces, squares, next_positions)
-            ending_pos = full_path[-1]
-            end_square_type = squares[ending_pos]
-            
-            # Create a more detailed button
-            button = pygame.Rect(
-                rect.x + int(20 * scale),
-                rect.y + int(80 * scale) + i * (button_height + button_spacing),
-                int(260 * scale),
-                button_height
-            )
-            
-            # Draw button with gradient effect
-            button_color = (200, 230, 255) if i == 0 else (255, 230, 200)
-            
-            # Add splash effect for path choice buttons
-            if 'clicked_path_button' in game_state and game_state['clicked_path_button'] == i:
-                # Get elapsed time since click
-                current_time = time.time()
-                click_elapsed = current_time - game_state['path_button_click_time']
-                if click_elapsed < 0.3:  # Show splash effect for 0.3 seconds
-                    # Change color for pressed effect
-                    button_color = (180, 210, 235) if i == 0 else (235, 210, 180)  # Slightly darker for pressed effect
-                else:
-                    # Remove click effect after time elapsed
-                    del game_state['clicked_path_button']
-                    del game_state['path_button_click_time']
-            
-            pygame.draw.rect(screen, button_color, button)
-            pygame.draw.rect(screen, (0, 0, 100), button, 2)  # Dark blue border
-            
-            # Draw button text with destination info
-            direction_text = font.render(f"{label} Path", True, BLACK)
-            screen.blit(direction_text, (button.x + int(10 * scale), button.y + int(5 * scale)))
-            
-            dest_text = font.render(f"Ends on: {end_square_type}", True, (100, 0, 0))
-            screen.blit(dest_text, (button.x + int(130 * scale), button.y + int(5 * scale)))
-            
-            game_state['path_buttons'].append((button, choice))
+    # (Path choice dialog is drawn after the quiz section, below, so it
+    #  renders on top of bonus cards and quiz — see "Draw path choice" below.)
 
-    # Reset button with hold progress and spinning animation during restart
-    restart_button_size = int(50 * scale)
-    restart_button_rect = pygame.Rect(int(650 * scale + offset_x), int(540 * scale + offset_y), restart_button_size, restart_button_size)
+
+    button_size = int(50 * scale)
+    # Positioning buttons: Restart, Achievement, Settings
+    # Positioning buttons: Restart, Achievement, Settings, Magnify
+    restart_button_rect = pygame.Rect(int(610 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
+    achievement_button_rect = pygame.Rect(int(670 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
+    settings_button_rect = pygame.Rect(int(730 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
+    magnify_button_rect = pygame.Rect(int(790 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
+
     
     if 'fade_start' in game_state:
         fade_time = time.time() - game_state['fade_start']
@@ -1663,10 +1771,15 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
     else:
         screen.blit(restart_button_scaled, restart_button_rect.topleft)
     
-    # Settings button to the right of restart button
-    settings_button_size = int(50 * scale)
-    settings_button_rect = pygame.Rect(int(710 * scale + offset_x), int(540 * scale + offset_y), settings_button_size, settings_button_size)
+    # Achievement button between restart and settings
+    screen.blit(achievement_button_scaled, achievement_button_rect.topleft)
+    
+    # Settings button
     screen.blit(settings_button_scaled, settings_button_rect.topleft)
+    
+    # Magnify button to the right of settings button
+    screen.blit(magnify_button_scaled, magnify_button_rect.topleft)
+
     
     # Draw settings menu if active
     if game_state.get('show_settings_menu', False):
@@ -1962,63 +2075,72 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                         screen.blit(full_text, (current_x, current_y))
                         current_x += full_text.get_width()
 
-    # Draw static card decks next to the die
-    die_center_x = int(DIE_POS[0] * scale + offset_x)
-    die_center_y = int(DIE_POS[1] * scale + offset_y)
-    
-    deck_scale_factor = 0.45  # Scale down the decks on the board
-    deck_offset = int(110 * scale)  # Distance from the die center
-    
-    # Static Bonus Deck (Left)
-    # Rotate 90 so the base faces the die (right)
-    bonus_deck_img = pygame.transform.smoothscale(cover_bonus_scaled, 
-                                                (int(cover_bonus_scaled.get_width() * deck_scale_factor), 
-                                                 int(cover_bonus_scaled.get_height() * deck_scale_factor)))
-    bonus_deck_rotated = pygame.transform.rotate(bonus_deck_img, 90)
-    bonus_deck_rect = bonus_deck_rotated.get_rect(center=(die_center_x - deck_offset, die_center_y))
-    screen.blit(bonus_deck_rotated, bonus_deck_rect.topleft)
-    
-    # Static Quiz Deck (Right)
-    # Rotate -90 so the base faces the die (left)
-    quiz_deck_img = pygame.transform.smoothscale(cover_quiz_scaled, 
-                                               (int(cover_quiz_scaled.get_width() * deck_scale_factor), 
-                                                int(cover_quiz_scaled.get_height() * deck_scale_factor)))
-    quiz_deck_rotated = pygame.transform.rotate(quiz_deck_img, -90)
-    quiz_deck_rect = quiz_deck_rotated.get_rect(center=(die_center_x + deck_offset, die_center_y))
-    screen.blit(quiz_deck_rotated, quiz_deck_rect.topleft)
-
+    # ---------------------------------------------------------------------------
+    # Draw active bonus image and activated cards — Moved here to be ABOVE 
+    # players (rendered earlier), satisfying the "except when activated" rule.
+    # ---------------------------------------------------------------------------
     # Helper for drawing card with shadow
     def draw_card_with_shadow(surf, pos, rot, scale_val):
         # Calculate shadow offset based on lift (scale_val)
         shadow_offset = int(12 * scale * scale_val)
-        
+
         # Create shadow surface
         rotated_surf = pygame.transform.rotate(surf, rot)
         shadow_surf = rotated_surf.copy()
         shadow_surf.fill((0, 0, 0, 100), special_flags=pygame.BLEND_RGBA_MULT)
-        
+
         # Draw shadow
         shadow_rect = shadow_surf.get_rect(center=(pos[0] + shadow_offset, pos[1] + shadow_offset))
         screen.blit(shadow_surf, shadow_rect.topleft)
-        
+
         # Draw card
         card_rect = rotated_surf.get_rect(center=pos)
         screen.blit(rotated_surf, card_rect.topleft)
+
+    # Helper for drawing player badge on quiz card
+    def draw_player_badge(surface, player, badge_pos, badge_size):
+        # Calculate sizes
+        outer_radius = badge_size // 2
+        inner_radius = int(outer_radius * 0.85)
+        icon_size = int(badge_size * 0.75)
+        
+        # Shadow for the badge
+        shadow_surf = pygame.Surface((badge_size + 4, badge_size + 4), pygame.SRCALPHA)
+        pygame.draw.circle(shadow_surf, (0, 0, 0, 80), (outer_radius + 2, outer_radius + 2), outer_radius)
+        surface.blit(shadow_surf, (badge_pos[0] - outer_radius - 2, badge_pos[1] - outer_radius - 2))
+        
+        # Outer white ring
+        pygame.draw.circle(surface, WHITE, badge_pos, outer_radius)
+        
+        # Inner coloured circle
+        badge_colour = player_colours[player.colour_index]
+        pygame.draw.circle(surface, badge_colour, badge_pos, inner_radius)
+        
+        # Player icon
+        if player.is_computer:
+            # Use difficulty-specific CPU icon if available
+            icon_img = cpu_difficulty_images_scaled.get(player.difficulty, cpu_image_scaled)
+        else:
+            icon_img = player_images_scaled[player.colour_index]
+            
+        scaled_icon = pygame.transform.smoothscale(icon_img, (icon_size, icon_size))
+        scaled_icon.set_alpha(255)  # Ensure 100% opacity
+        surface.blit(scaled_icon, (badge_pos[0] - icon_size // 2, badge_pos[1] - icon_size // 2))
 
     # Draw active bonus image
     if 'bonus_image_key' in game_state and 'bonus_image_state' in game_state:
         image = bonus_result_images_scaled[game_state['bonus_image_key']]
         state = game_state['bonus_image_state']
-        
+
         if state == 'growing':
             elapsed = time.time() - game_state['bonus_grow_start']
             scale_factor = min(1.0, elapsed / 1.0)
             rotation = 90 * (1.0 - scale_factor)
-            
+
             start_x = die_center_x - deck_offset
             current_x = start_x + (die_center_x - start_x) * scale_factor
             current_y = die_center_y
-            
+
             anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
             scaled_width = int(cover_bonus_scaled.get_width() * anim_scale)
             scaled_height = int(cover_bonus_scaled.get_height() * anim_scale)
@@ -2054,24 +2176,33 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             elapsed = time.time() - game_state['bonus_shrink_start']
             scale_factor = max(0.0, 1.0 - elapsed / 1.0)
             rotation = 90 * (1.0 - scale_factor)
-            
+
             end_x = die_center_x - deck_offset
             current_x = die_center_x + (end_x - die_center_x) * (1.0 - scale_factor)
             current_y = die_center_y
-            
+
             anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
             scaled_width = int(cover_bonus_scaled.get_width() * anim_scale)
             scaled_height = int(cover_bonus_scaled.get_height() * anim_scale)
             scaled_image = pygame.transform.smoothscale(cover_bonus_scaled, (scaled_width, scaled_height))
             draw_card_with_shadow(scaled_image, (current_x, current_y), rotation, scale_factor)
 
+
     # Draw quiz last to ensure it's always on top
     if game_state.get('show_quiz', False) and game_state.get('quiz_question'):
+        # Build a label string identifying the current player
+        _quiz_player = players[game_state['current_player']]
+        if _quiz_player.is_computer:
+            _quiz_player_label = f"CPU Player {_quiz_player.id + 1}"
+        else:
+            _quiz_player_label = f"Player {_quiz_player.id + 1}"
+        _quiz_label_colour = player_colours[_quiz_player.colour_index]
+        _quiz_label_font = pygame.font.SysFont(None, int(18 * scale), bold=True)
         current_time = time.time()
         elapsed = current_time - game_state['quiz_start_time']
         # Update quiz dimensions to match bonus cards with 4:3 aspect ratio
-        quiz_width = int(280 * scale)  # Match bonus card width (same as in resize_assets)
-        quiz_height = int(quiz_width * 3 / 4)  # 4:3 aspect ratio to match bonus cards
+        quiz_width = int(320 * scale)  # Increased width to provide more height at 4:3 ratio
+        quiz_height = int(quiz_width * 3 / 4)  # Restored correct 4:3 aspect ratio
         if game_state['quiz_state'] == 'growing':
             scale_factor = min(1.0, elapsed / 1.0)
             rotation = -90 * (1.0 - scale_factor)
@@ -2121,11 +2252,20 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             shadow_rect.y += shadow_offset
             pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
             pygame.draw.rect(screen, WHITE, rect)
-            question, options, _ = game_state['quiz_question']
             text_margin = int(10 * scale)
+            # Draw the player badge hovering over the top-left corner
+            badge_size = int(48 * scale)
+            badge_pos = (rect.left, rect.top)
+            draw_player_badge(screen, _quiz_player, badge_pos, badge_size)
+            
+            # Render player label inside the card, offset for the badge
+            _label_surf = _quiz_label_font.render(_quiz_player_label, True, _quiz_label_colour)
+            screen.blit(_label_surf, (rect.x + text_margin + int(20 * scale), rect.y + text_margin))
+            _label_h = _label_surf.get_height() + int(4 * scale)
+            question, options, _ = game_state['quiz_question']
             max_text_width = quiz_width - 2 * text_margin
-            render_wrapped_text(screen, font, question, max_text_width, 
-                               rect.x + text_margin, rect.y + text_margin)
+            render_wrapped_text(screen, font, question, max_text_width,
+                               rect.x + text_margin, rect.y + text_margin + _label_h)
             if current_time >= game_state['quiz_timer']:
                 game_state['quiz_state'] = 'buttons'
                 game_state['pop_played'] = False
@@ -2141,11 +2281,21 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             shadow_rect.y += shadow_offset
             pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
             pygame.draw.rect(screen, WHITE, rect)
-            question, options, _ = game_state['quiz_question']
             text_margin = int(10 * scale)
+            # Draw the player badge hovering over the top-left corner
+            badge_size = int(48 * scale)
+            badge_pos = (rect.left, rect.top)
+            draw_player_badge(screen, _quiz_player, badge_pos, badge_size)
+            
+            # Render player label inside the card, offset for the badge
+            _label_surf = _quiz_label_font.render(_quiz_player_label, True, _quiz_label_colour)
+            screen.blit(_label_surf, (rect.x + text_margin + int(20 * scale), rect.y + text_margin))
+            _label_h = _label_surf.get_height() + int(4 * scale)
+            question, options, _ = game_state['quiz_question']
             max_text_width = quiz_width - 2 * text_margin
-            question_height = render_wrapped_text(screen, font, question, max_text_width, 
-                                                rect.x + text_margin, rect.y + text_margin)
+            question_height = render_wrapped_text(screen, font, question, max_text_width,
+                                                rect.x + text_margin, rect.y + text_margin + _label_h)
+            question_height += _label_h
             quiz_buttons = []
             min_button_height = int(25 * scale)
             button_spacing = int(5 * scale)
@@ -2195,12 +2345,21 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             shadow_rect.y += shadow_offset
             pygame.draw.rect(screen, (0, 0, 0, 100), shadow_rect)
             pygame.draw.rect(screen, WHITE, rect)
-            question, _, _ = game_state['quiz_question']
             text_margin = int(10 * scale)
+            # Draw the player badge hovering over the top-left corner
+            badge_size = int(48 * scale)
+            badge_pos = (rect.left, rect.top)
+            draw_player_badge(screen, _quiz_player, badge_pos, badge_size)
+            
+            # Render player label inside the card, offset for the badge
+            _label_surf = _quiz_label_font.render(_quiz_player_label, True, _quiz_label_colour)
+            screen.blit(_label_surf, (rect.x + text_margin + int(20 * scale), rect.y + text_margin))
+            _label_h = _label_surf.get_height() + int(4 * scale)
+            question, _, _ = game_state['quiz_question']
             max_text_width = quiz_width - 2 * text_margin
-            render_wrapped_text(screen, font, question, max_text_width, 
-                               rect.x + text_margin, rect.y + text_margin)
-            if current_time - game_state['quiz_answer_delay_start'] >= 1.0:
+            render_wrapped_text(screen, font, question, max_text_width,
+                               rect.x + text_margin, rect.y + text_margin + _label_h)
+            if current_time - game_state['quiz_answer_delay_start'] >= 2.0:
                 game_state['quiz_state'] = 'flipping_back'
                 game_state['quiz_flip_back_start'] = current_time
                 audio.disconnect_sound.play()
@@ -2248,6 +2407,98 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
                 del game_state['quiz_shrink_start']
                 if 'quiz_answer_delay_start' in game_state:
                     del game_state['quiz_answer_delay_start']
+
+    # Draw path choice on top of everything (bonus cards, quiz, players)
+    if game_state.get('show_path_choice_after_roll', False):
+        current_player = players[game_state['current_player']]
+        current_pos = current_player.position
+        choices = next_positions[current_pos]
+        remaining_spaces = game_state.get('spaces_remaining', 0)
+
+        # Show ghost players at potential end positions
+        for choice in choices:
+            full_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces, squares, next_positions)
+            ending_pos = full_path[-1]
+
+            x, y = squares_coords[ending_pos]
+            x = int(x * scale + offset_x)
+            y = int(y * scale + offset_y)
+
+            # Draw a special marker for the end position
+            pygame.draw.circle(screen, (255, 255, 0), (x, y), int(20 * scale), 3)
+
+            # Draw the ghost player
+            img = player_images_scaled[current_player.colour_index]
+            img_copy = img.copy()
+            img_copy.set_alpha(150)
+            screen.blit(img_copy, (x - img_copy.get_width() // 2, y - img_copy.get_height() // 2))
+
+        # Draw path choice dialog centered on die position
+        dialog_width = int(300 * scale)
+        dialog_height = int(180 * scale)
+        rect = pygame.Rect(die_center_x - dialog_width // 2, die_center_y - dialog_height // 2, dialog_width, dialog_height)
+
+        # Draw dialog background with border
+        pygame.draw.rect(screen, WHITE, rect)
+        pygame.draw.rect(screen, (0, 0, 100), rect, 3)  # Dark blue border
+
+        # Build player label for who is choosing
+        _path_label_font = pygame.font.SysFont(None, int(18 * scale))
+        if current_player.is_computer:
+            _path_player_label = f"CPU Player {current_player.id + 1} — Choose a Path!"
+        else:
+            _path_player_label = f"Player {current_player.id + 1} — Choose Your Path!"
+        _path_label_colour = player_colours[current_player.colour_index]
+
+        # Draw player label (with shadow) at the top
+        _path_label_shadow = _path_label_font.render(_path_player_label, True, (100, 100, 100))
+        screen.blit(_path_label_shadow, (rect.x + int(12 * scale), rect.y + int(12 * scale)))
+        _path_label_surf = _path_label_font.render(_path_player_label, True, _path_label_colour)
+        screen.blit(_path_label_surf, (rect.x + int(10 * scale), rect.y + int(10 * scale)))
+
+        # Draw remaining spaces info
+        spaces_text = font.render(f"Remaining Spaces: {remaining_spaces}", True, (100, 0, 0))
+        screen.blit(spaces_text, (rect.x + int(10 * scale), rect.y + int(32 * scale)))
+
+        labels = ["North", "West"]
+        button_height = int(35 * scale)
+        button_spacing = int(15 * scale)
+
+        game_state['path_buttons'] = []
+
+        for i, (label, choice) in enumerate(zip(labels, choices)):
+            full_path = get_movement_path_with_choice(current_pos, choice, remaining_spaces, squares, next_positions)
+            ending_pos = full_path[-1]
+            end_square_type = squares[ending_pos]
+
+            button = pygame.Rect(
+                rect.x + int(20 * scale),
+                rect.y + int(80 * scale) + i * (button_height + button_spacing),
+                int(260 * scale),
+                button_height
+            )
+
+            button_color = (200, 230, 255) if i == 0 else (255, 230, 200)
+
+            if 'clicked_path_button' in game_state and game_state['clicked_path_button'] == i:
+                current_time = time.time()
+                click_elapsed = current_time - game_state['path_button_click_time']
+                if click_elapsed < 0.3:
+                    button_color = (180, 210, 235) if i == 0 else (235, 210, 180)
+                else:
+                    del game_state['clicked_path_button']
+                    del game_state['path_button_click_time']
+
+            pygame.draw.rect(screen, button_color, button)
+            pygame.draw.rect(screen, (0, 0, 100), button, 2)
+
+            direction_text = font.render(f"{label} Path", True, BLACK)
+            screen.blit(direction_text, (button.x + int(10 * scale), button.y + int(5 * scale)))
+
+            dest_text = font.render(f"Ends on: {end_square_type}", True, (100, 0, 0))
+            screen.blit(dest_text, (button.x + int(130 * scale), button.y + int(5 * scale)))
+
+            game_state['path_buttons'].append((button, choice))
 
     # Draw jail standee markers for players in jail
     # First, collect standee positions to handle staggering
@@ -2480,7 +2731,8 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
 
     # Return the rects for interactive elements
     quiz_answer_rects = game_state.get('quiz_buttons', [])
-    return dice_rect, restart_button_rect, settings_button_rect, quiz_answer_rects if game_state.get('quiz_buttons') else []
+    return dice_rect, restart_button_rect, achievement_button_rect, settings_button_rect, magnify_button_rect, quiz_answer_rects if game_state.get('quiz_buttons') else []
+
 
 def select_players():
     """Let players choose who's human or CPU."""
@@ -2538,6 +2790,10 @@ def select_players():
         board_selector_rects.append(pygame.Rect(x_pos, int(350 * scale + offset_y), board_button_width, board_button_height))
     
     start_button_rect = pygame.Rect(int(300 * scale + offset_x), int(400 * scale + offset_y), int(200 * scale), int(50 * scale))
+    gallery_button_rect = pygame.Rect(int((ORIGINAL_WIDTH - 160) * scale + offset_x), int((ORIGINAL_HEIGHT - 60) * scale + offset_y), int(150 * scale), int(50 * scale))
+    
+    show_achievements = False
+    achievement_pane_rect = None
 
     while True:
         # No longer creating difficulty_rects since we're removing those buttons
@@ -2584,6 +2840,7 @@ def select_players():
                     board_selector_rects.append(pygame.Rect(x_pos, int(350 * scale + offset_y), board_button_width, board_button_height))
                     
                 start_button_rect = pygame.Rect(int(300 * scale + offset_x), int(400 * scale + offset_y), int(200 * scale), int(50 * scale))
+                gallery_button_rect = pygame.Rect(int((ORIGINAL_WIDTH - 160) * scale + offset_x), int((ORIGINAL_HEIGHT - 60) * scale + offset_y), int(150 * scale), int(50 * scale))
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = event.pos
                 if event.button == 1:  # Left click
@@ -2607,6 +2864,14 @@ def select_players():
                             cycle_difficulty(i, difficulties)
                             break
                             
+                if gallery_button_rect.collidepoint(pos):
+                    show_achievements = not show_achievements
+                    audio.connect_sound.play()
+                
+                # Close achievements if clicking outside
+                if show_achievements and achievement_pane_rect and not achievement_pane_rect.collidepoint(pos) and not gallery_button_rect.collidepoint(pos):
+                    show_achievements = False
+                    
                 if start_button_rect.collidepoint(pos) and any(state > 0 for state in player_states):
                     selected_players = []
                     for i, state in enumerate(player_states):
@@ -2617,7 +2882,12 @@ def select_players():
                     audio.super_mario_sound.play()
                     return selected_players, board_names[selected_board]
             elif event.type == pygame.KEYDOWN:
-                if event.key >= pygame.K_1 and event.key <= pygame.K_6:
+                if event.key == pygame.K_ESCAPE:
+                    if show_achievements:
+                        show_achievements = False
+                    else:
+                        pass
+                elif event.key >= pygame.K_1 and event.key <= pygame.K_6:
                     index = event.key - pygame.K_1
                     if index < len(player_states):
                         toggle_player_state(index, player_states, difficulties)
@@ -2679,8 +2949,11 @@ def select_players():
                 text_color = BLACK if i == selected_board else WHITE
                 text = font.render(board_names[i], True, text_color)
                 screen.blit(text, text.get_rect(center=rect.center))
-                # Make the buttons slightly wider instead of using arrow indicators
-                # (Removing arrows that were causing display issues)
+                
+        # Draw Gallery Button
+        pygame.draw.rect(screen, DARK_GREY, gallery_button_rect, border_radius=int(5 * scale))
+        gallery_text = font.render("Gallery", True, GOLD)
+        screen.blit(gallery_text, gallery_text.get_rect(center=gallery_button_rect.center))
 
         # Create a desaturated button with 50% opacity when inactive
         if any(state > 0 for state in player_states):
@@ -2708,13 +2981,17 @@ def select_players():
             text_surface.set_alpha(128)
             screen.blit(text_surface, text.get_rect(center=start_button_rect.center))
 
+        # Draw Achievements Pane if active
+        if show_achievements:
+            achievement_pane_rect = render_achievements_pane(screen, scale, offset_x, offset_y, board_names[selected_board])
+
         pygame.display.flip()
 
 def resize_assets(scale, board_type='Classic'):
     """Resize all game assets based on screen scale while maintaining aspect ratios where necessary."""
     global player_images_scaled, cpu_image_scaled, bonus_result_images_scaled, cpu_difficulty_images_scaled
     global dice_images_scaled, tile_images_scaled, restart_button_scaled
-    global bonus_images_scaled, settings_button_scaled, board_image_scaled
+    global bonus_images_scaled, settings_button_scaled, achievement_button_scaled, board_image_scaled, magnify_button_scaled
     global cover_bonus_scaled, cover_quiz_scaled
     
     # Calculate slightly smaller tile size to account for the gaps
@@ -2788,6 +3065,14 @@ def resize_assets(scale, board_type='Classic'):
     # Use the appropriate button images based on board type
     restart_button_scaled = pygame.transform.smoothscale(button_set['restart'], (int(55 * scale), int(55 * scale)))  # Increased from 50 to 55
     settings_button_scaled = pygame.transform.smoothscale(button_set['settings'], (int(55 * scale), int(55 * scale)))  # Increased from 50 to 55
+    achievement_button_scaled = pygame.transform.smoothscale(button_set['achievement'], (int(55 * scale), int(55 * scale)))
+    
+    # Load and scale the magnify button (magnifying glass icon)
+    magnify_button_original = load_and_convert("Assets/Images/Tiles/Magnifying Glass.png")
+    if board_type == 'Expert':
+        magnify_button_original = load_and_convert("Assets/Images/Tiles/eMagnifying Glass.png")
+    magnify_button_scaled = pygame.transform.smoothscale(magnify_button_original, (int(55 * scale), int(55 * scale)))
+
     
     # Scale bonus images with a slightly larger size
     target_width = int(280 * scale)  # Increased from 250 to 280
@@ -2801,7 +3086,7 @@ def resize_assets(scale, board_type='Classic'):
     cover_bonus_scaled = pygame.transform.smoothscale(cover_bonus_original, (target_width, target_height))
     cover_quiz_scaled = pygame.transform.smoothscale(cover_quiz_original, (target_width, target_height))
     
-    return tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, bonus_result_images_scaled
+    return tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, bonus_result_images_scaled, magnify_button_scaled
 
 def main():
     """Main game loop and initialization."""
@@ -2875,6 +3160,14 @@ def main():
             'show_settings_menu': False,  # Settings menu state
             'last_bonus_position': {},  # Track the last position where each player picked up a bonus card
             'volume_drag_active': False,  # Flag to track if volume slider is being dragged
+            'show_achievements_menu': False,  # Achievements menu state
+            'camera_mode': 0, # 0: Default, 1: All Players, 2: Current Player
+            'camera_zoom': 1.0,
+            'camera_focus_x': 400.0,
+            'camera_focus_y': 300.0,
+            'camera_target_zoom': 1.0,
+            'camera_target_focus_x': 400.0,
+            'camera_target_focus_y': 300.0,
         }
         
         # For Secret board, set custom die position to avoid overlapping with tiles
@@ -2920,7 +3213,7 @@ def main():
         audio.apply_master_volume(game_state['master_volume'])
         clock = pygame.time.Clock()
 
-        tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, bonus_result_images_scaled = resize_assets(scale, selected_board)
+        tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, bonus_result_images_scaled, magnify_button_scaled = resize_assets(scale, selected_board)
 
         running = True
         while running:
@@ -2955,7 +3248,7 @@ def main():
                     font = pygame.font.SysFont(None, int(24 * scale))
                     title_font = pygame.font.SysFont(None, int(72 * scale))
                     # Use resize_assets to properly resize all game assets
-                    tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, bonus_result_images_scaled = resize_assets(scale, game_state['selected_board'])
+                    tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, bonus_result_images_scaled, magnify_button_scaled = resize_assets(scale, game_state['selected_board'])
                     game_state['last_scale'] = scale
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
@@ -2990,17 +3283,55 @@ def main():
                                         apply_quiz_effect(current_player, True, game_state, scale)
                                     else:
                                         apply_quiz_effect(current_player, False, game_state, scale)
+                    elif event.key == pygame.K_ESCAPE:
+                        if game_state.get('show_achievements_menu', False):
+                            game_state['show_achievements_menu'] = False
+                        elif game_state.get('show_settings_menu', False):
+                            game_state['show_settings_menu'] = False
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     pos = event.pos
-                    restart_button_rect = pygame.Rect(int(650 * scale + offset_x), int(540 * scale + offset_y), int(50 * scale), int(50 * scale))
+                    button_size = int(50 * scale)
+                    restart_button_rect = pygame.Rect(int(610 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
                     if restart_button_rect.collidepoint(pos):
                         game_state['restart_hold_start'] = time.time()
                     
+                    # Handle achievement button click
+                    achievement_button_rect = pygame.Rect(int(670 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
+                    if achievement_button_rect.collidepoint(pos):
+                        # Toggle achievements menu
+                        game_state['show_achievements_menu'] = not game_state.get('show_achievements_menu', False)
+                        audio.connect_sound.play()
+                        # Close settings if opening achievements
+                        if game_state['show_achievements_menu']:
+                            game_state['show_settings_menu'] = False
+                    
+                    # Close achievements if clicking outside
+                    if game_state.get('show_achievements_menu', False):
+                        # We'll calculate the pane rect later in rendering, but we can estimate it here 
+                        # or just rely on the click handling below
+                        pass
+                    
                     # Handle settings button click
-                    settings_button_rect = pygame.Rect(int(710 * scale + offset_x), int(540 * scale + offset_y), int(50 * scale), int(50 * scale))
+                    settings_button_rect = pygame.Rect(int(730 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
                     if settings_button_rect.collidepoint(pos):
                         # Toggle settings menu
                         game_state['show_settings_menu'] = not game_state.get('show_settings_menu', False)
+                    
+                    # Handle magnify button click
+                    if 'magnify_button_rect' in locals() or 'magnify_button_rect' in globals(): # Ensure it exists if we missed it
+                        pass
+                    
+                    # Wait, magnify_button_rect is returned by draw_board at the end of the loop, but we need it for collision.
+                    # I'll calculate it here just like settings_button_rect.
+                    magnify_button_rect = pygame.Rect(int(790 * scale + offset_x), int(540 * scale + offset_y), button_size, button_size)
+                    if magnify_button_rect.collidepoint(pos):
+                        # Cycle camera mode: 0 -> 1 -> 2 -> 0
+                        game_state['camera_mode'] = (game_state.get('camera_mode', 0) + 1) % 3
+                        audio.connect_sound.play()
+                        # Close other menus
+                        game_state['show_settings_menu'] = False
+                        game_state['show_achievements_menu'] = False
+
                     
                     # Handle settings menu interactions if menu is open
                     if game_state.get('show_settings_menu', False):
@@ -3055,6 +3386,16 @@ def main():
                         if not menu_rect.collidepoint(pos) and not settings_button_rect.collidepoint(pos):
                             game_state['show_settings_menu'] = False
                             game_state['volume_drag_active'] = False
+                            
+                    # Handle click outside achievements menu to close it
+                    if game_state.get('show_achievements_menu', False):
+                        pane_width = int(600 * scale)
+                        pane_height = int(450 * scale)
+                        pane_x = int((screen.get_width() // 2) - (pane_width // 2))
+                        pane_y = int((screen.get_height() // 2) - (pane_height // 2))
+                        pane_rect = pygame.Rect(pane_x, pane_y, pane_width, pane_height)
+                        if not pane_rect.collidepoint(pos) and not achievement_button_rect.collidepoint(pos):
+                            game_state['show_achievements_menu'] = False
                     
                     dice_rect = pygame.Rect(int(DIE_POS[0] * scale + offset_x), int(DIE_POS[1] * scale + offset_y), int(50 * scale), int(50 * scale))
                     current_player = players[game_state['current_player']]
@@ -3131,7 +3472,11 @@ def main():
                         # Apply volume to all sound channels
                         audio.apply_master_volume(volume)
 
+            # Update camera targets based on current state
+            update_camera_targets(game_state, players)
+            
             animations_active = update_animation(game_state, scale)
+
 
             if game_state.get('restart_hold_start') is not None:
                 hold_time = time.time() - game_state['restart_hold_start']
@@ -3146,7 +3491,7 @@ def main():
             if 'bonus_image_state' in game_state:
                 current_time = time.time()
                 if game_state['bonus_image_state'] == 'waiting':
-                    if current_time - game_state['bonus_image_start'] >= 0.8:
+                    if current_time - game_state['bonus_image_start'] >= 0.1:  # Reduced from 0.8s to 0.1s to sync with sound
                         game_state['bonus_image_state'] = 'growing'
                         game_state['bonus_grow_start'] = current_time
                         game_state['bonus_flipped'] = False
@@ -3273,16 +3618,16 @@ def main():
                         # Check if there's a pending quiz from a bonus card
                         if game_state.get('pending_quiz', False):
                             # Determine which quiz deck to use based on the board type
-                            if game_state.get('selected_board') == "Expert" and expert_cards.quiz_card_index < len(expert_cards.quiz_cards):
+                            if game_state.get('selected_board') == "Expert" and cards.expert_quiz_card_index < len(cards.expert_quiz_cards):
                                 # Use expert quiz cards on the expert board
-                                question, options, correct = expert_cards.quiz_cards[expert_cards.quiz_card_index]
+                                question, options, correct = cards.expert_quiz_cards[cards.expert_quiz_card_index]
                                 game_state['quiz_question'] = (question, options, correct)
                                 game_state['show_quiz'] = True
                                 game_state['quiz_state'] = 'growing'
                                 game_state['quiz_start_time'] = time.time()
                                 game_state['pop_played'] = False
                                 audio.drum_machine_sound.play()
-                                expert_cards.quiz_card_index = (expert_cards.quiz_card_index + 1) % len(expert_cards.quiz_cards)
+                                cards.expert_quiz_card_index = (cards.expert_quiz_card_index + 1) % len(cards.expert_quiz_cards)
                                 game_state['message'] = f"Player {players[game_state['current_player']].id + 1} faces an expert quiz."
                             elif cards.quiz_card_index < len(cards.quiz_cards):
                                 # Use regular quiz cards on the classic board
@@ -3408,7 +3753,7 @@ def main():
                 if current_player.is_computer:
                     # Add a slight delay before CPU answers the quiz to make the game feel more natural
                     if 'cpu_quiz_delay' not in game_state:
-                        game_state['cpu_quiz_delay'] = time.time() + 1.0  # 1 second delay
+                        game_state['cpu_quiz_delay'] = time.time() + 3.0  # 3 second delay to read question
                     elif time.time() > game_state['cpu_quiz_delay']:
                         # CPU player makes a choice based on difficulty
                         _, _, correct = game_state['quiz_question']
@@ -3432,7 +3777,7 @@ def main():
                         game_state['button_click_time'] = time.time()
                         
                         # Wait a moment to let the splash effect be visible before applying the effect
-                        game_state['cpu_splash_delay'] = time.time() + 0.2  # 0.2 second delay to show splash
+                        game_state['cpu_splash_delay'] = time.time() + 1.0  # 1.0 second delay to show splash
                         game_state['cpu_splash_option'] = selected_option
                         game_state['cpu_splash_is_correct'] = is_correct
                         
@@ -3478,8 +3823,9 @@ def main():
                         if game_state['bonus_action'][0] != "pick_quiz" or not game_state.get('show_quiz', False):
                             # Start the bonus action (the actions themselves are already handled in the bonus_image_state section)
                             # We just need to trigger the shrinking animation to complete the bonus card process
-                            game_state['bonus_image_state'] = 'shrinking'
-                            game_state['bonus_shrink_start'] = time.time()
+                            game_state['bonus_image_state'] = 'flipping_back'
+                            game_state['bonus_flip_back_start'] = time.time()
+                            game_state['bonus_flipped'] = False
                             
                             # Remove the CPU bonus delay if it exists
                             if 'cpu_bonus_delay' in game_state:
@@ -3507,13 +3853,74 @@ def main():
                             # Make sure has_rolled is set to true to ensure turn ends properly
                             current_player.has_rolled = True
 
-            dice_rect, restart_button_rect, settings_button_rect, quiz_answer_rects = draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, bonus_result_images_scaled)
+            # Handle CPU players automatically picking paths
+            if game_state.get('show_path_choice_after_roll', False) and 'path_buttons' in game_state:
+                current_player = players[game_state['current_player']]
+                if current_player.is_computer:
+                    # Add a slight delay before CPU picks a path to make it feel more natural
+                    if 'cpu_path_delay' not in game_state:
+                        game_state['cpu_path_delay'] = time.time() + 2.5  # 2.5 second delay to read options
+                    elif time.time() > game_state['cpu_path_delay']:
+                        # CPU player makes a choice - for now, simple random selection
+                        # In the future, this could be more intelligent based on difficulty
+                        choice_idx = random.randrange(len(game_state['path_buttons']))
+                        _, choice = game_state['path_buttons'][choice_idx]
+                        
+                        # Add splash effect tracking for path buttons (visual feedback)
+                        game_state['clicked_path_button'] = choice_idx
+                        game_state['path_button_click_time'] = time.time()
+                        
+                        # Set a small delay for the splash effect before moving
+                        if 'cpu_path_splash_delay' not in game_state:
+                            game_state['cpu_path_splash_delay'] = time.time() + 0.8  # 0.8 second splash
+                        elif time.time() > game_state['cpu_path_splash_delay']:
+                            # Finalise the choice and start the movement animation
+                            current_player.path_choices[current_player.position] = choice
+                            remaining_spaces = game_state.get('spaces_remaining', 0)
+                            
+                            # Check if the player started their turn on the choice point
+                            started_on_choice = isinstance(next_positions[current_player.position], list)
+                            movement_path = get_movement_path_with_choice(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
+                            
+                            anim = {
+                                'player': current_player,
+                                'path': movement_path,
+                                'index': 0,
+                                'last_time': time.time(),
+                                'message': f"CPU Player {current_player.id + 1} chose a path. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
+                                'is_initial_move': True,
+                                'delay': 0.5
+                            }
+                            current_player.active_animations.append(anim)
+                            audio.indigogo_sound.play()
+                            
+                            # Clean up game state flags
+                            game_state['show_path_choice_after_roll'] = False
+                            del game_state['path_buttons']
+                            if 'roll_for_path_choice' in game_state:
+                                del game_state['roll_for_path_choice']
+                            if 'spaces_remaining' in game_state:
+                                del game_state['spaces_remaining']
+                            
+                            # Remove CPU-specific delays
+                            del game_state['cpu_path_delay']
+                            del game_state['cpu_path_splash_delay']
+                            
+                            current_player.has_rolled = True
+
+            dice_rect, restart_button_rect, achievement_button_rect, settings_button_rect, magnify_button_rect, quiz_answer_rects = draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, magnify_button_scaled, bonus_result_images_scaled)
+
+            # Draw Achievements Pane if active
+            if game_state.get('show_achievements_menu', False):
+                render_achievements_pane(screen, scale, offset_x, offset_y, game_state['selected_board'])
+
             
-            # Display player timers and positions in the top-right corner
-            timer_x = SCREEN_WIDTH - 200 * scale  # Right side of screen with padding
-            timer_y_start = 30 * scale  # Start near the top
-            timer_spacing = 40 * scale  # Space between each player timer
-            display_player_timers(game_state, screen, font, timer_x, timer_y_start, timer_spacing, players, player_colours)
+            # Display player timers and positions in the top-right corner if enabled in settings
+            if game_state.get('show_timers', False):
+                timer_x = SCREEN_WIDTH - 200 * scale  # Right side of screen with padding
+                timer_y_start = 30 * scale  # Start near the top
+                timer_spacing = 40 * scale  # Space between each player timer
+                display_player_timers(game_state, screen, font, timer_x, timer_y_start, timer_spacing, players, player_colours)
             
             # Check if it's time to play the jail sound
             if game_state.get('jail_sound_delay') and not game_state.get('jail_sound_played', False):
