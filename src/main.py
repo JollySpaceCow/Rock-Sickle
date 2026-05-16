@@ -51,6 +51,17 @@ cover_bonus_scaled = None
 cover_quiz_scaled = None
 board_image_scaled = None
 
+# Cache for camera-scaled assets to improve performance and quality
+camera_asset_cache = {
+    'zoom': 1.0,
+    'scale': 1.0,
+    'board_type': None,
+    'tiles': {},
+    'players': [],
+    'cpu': {},
+    'dice': []
+}
+
 def transform_coords(x, y, scale, game_state):
     """Transform world coordinates to screen coordinates based on camera state."""
     camera_zoom = game_state.get('camera_zoom', 1.0)
@@ -990,29 +1001,105 @@ def update_animation(game_state, scale):
 
 from src.ui.menus import toggle_player_state, cycle_difficulty
 from src.ui.renderer import format_time, get_player_position_text, render_player_text, display_player_timers, render_coloured_message, render_wrapped_text
-def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, magnify_button_scaled, bonus_result_images_scaled):
+def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, cpu_difficulty_images_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, magnify_button_scaled, bonus_result_images_scaled):
     """Draw the game board and all its elements with card-flipping animations for button and squish for squares."""
+    global camera_asset_cache
     camera_zoom = game_state.get('camera_zoom', 1.0)
+    board_type = game_state.get('selected_board', 'Classic')
     
-    # Pre-scale tile images for the current camera zoom level if needed
+    # Pre-scale assets for the current camera zoom level if needed
+    # We scale from original assets to avoid the "double-scaling blur"
     if abs(camera_zoom - 1.0) > 0.001:
-        current_tile_images = {
-            key: pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
-            for key, img in tile_images_scaled.items()
-        }
-        current_player_images = [
-            pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
-            for img in player_images_scaled
-        ]
-        # Handle CPU images
-        current_cpu_difficulty_images = {
-            key: pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
-            for key, img in cpu_difficulty_images_scaled.items()
-        }
-        current_dice_images = [
-            pygame.transform.smoothscale(img, (int(img.get_width() * camera_zoom), int(img.get_height() * camera_zoom)))
-            for img in dice_images_scaled
-        ]
+        # Check if we can use the cache
+        if (abs(camera_asset_cache['zoom'] - camera_zoom) < 0.001 and 
+            abs(camera_asset_cache['scale'] - scale) < 0.001 and 
+            camera_asset_cache['board_type'] == board_type):
+            
+            current_tile_images = camera_asset_cache['tiles']
+            current_player_images = camera_asset_cache['players']
+            current_cpu_difficulty_images = camera_asset_cache['cpu']
+            current_dice_images = camera_asset_cache['dice']
+        else:
+            # Regenerate cache
+            # Calculate the target sizes based on the base scale and camera zoom
+            if board_type == 'Expert':
+                tile_size = int((40 * scale) - (GAP_BETWEEN_TILES * scale * 0.3))
+                player_size = int(35 * scale)
+            elif board_type == 'Secret':
+                tile_size = int(16 * scale)
+                player_size = int(14 * scale)
+            else:
+                tile_size = int((60 * scale) - (GAP_BETWEEN_TILES * scale * 0.3))
+                player_size = int(50 * scale)
+            
+            # Zoomed sizes
+            z_tile_size = int(tile_size * camera_zoom)
+            z_player_size = int(player_size * camera_zoom)
+            z_dice_size = int(55 * scale * camera_zoom)
+            
+            # Get the correct original set
+            tile_images_set = board_tile_images[board_type]
+            
+            # Use pygame.transform.scale (nearest-neighbour) for very high zoom or if assets are pixel-art
+            # For now, we use smoothscale from ORIGINAL assets which is much crisper than scaling from scaled images
+            current_tile_images = {
+                key: pygame.transform.smoothscale(img, (z_tile_size, z_tile_size))
+                for key, img in tile_images_set.items() if key not in ['F', 'Jail']
+            }
+            
+            # Special handling for Finish tile (it has different aspect ratios/orientations)
+            if board_type == 'Classic':
+                finish_rotated = pygame.transform.rotate(tile_images_set['F'], 90)
+                finish_height = int((120 * scale) - (GAP_BETWEEN_TILES * scale * 0.3))
+            elif board_type == 'Secret':
+                finish_rotated = tile_images_set['F']
+                finish_height = tile_size
+            else: # Expert
+                finish_rotated = tile_images_set['F']
+                finish_height = tile_size
+            
+            current_tile_images['F'] = pygame.transform.smoothscale(finish_rotated, (z_tile_size, int(finish_height * camera_zoom)))
+            
+            # Special handling for Jail tile
+            if board_type == 'Expert':
+                jail_size = int(tile_size * 4.1)
+            elif board_type == 'Secret':
+                jail_size = int(tile_size * 2.0)
+            else:
+                jail_size = int(tile_size * 1.5)
+            
+            current_tile_images['Jail'] = pygame.transform.smoothscale(tile_images_set['Jail'], (int(jail_size * camera_zoom), int(jail_size * camera_zoom)))
+            
+            # Scale players and CPU from originals
+            current_player_images = [
+                pygame.transform.smoothscale(img, (z_player_size, z_player_size))
+                for img in player_images_original
+            ]
+            for img in current_player_images:
+                img.set_alpha(191)
+                
+            current_cpu_difficulty_images = {
+                key: pygame.transform.smoothscale(img, (z_player_size, z_player_size))
+                for key, img in cpu_difficulty_images_original.items()
+            }
+            for img in current_cpu_difficulty_images.values():
+                img.set_alpha(191)
+                
+            current_dice_images = [
+                pygame.transform.smoothscale(img, (z_dice_size, z_dice_size))
+                for img in dice_images_original
+            ]
+            
+            # Update cache
+            camera_asset_cache = {
+                'zoom': camera_zoom,
+                'scale': scale,
+                'board_type': board_type,
+                'tiles': current_tile_images,
+                'players': current_player_images,
+                'cpu': current_cpu_difficulty_images,
+                'dice': current_dice_images
+            }
     else:
         current_tile_images = tile_images_scaled
         current_player_images = player_images_scaled
@@ -1300,21 +1387,23 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
     deck_scale_factor = 0.45 * camera_zoom  # Scale down the decks on the board
     deck_offset = int(110 * scale * camera_zoom)  # Distance from the die center
 
-
     # Static Bonus Deck (Left)
     # Rotate 90 so the base faces the die (right)
-    bonus_deck_img = pygame.transform.smoothscale(cover_bonus_scaled,
-                                                (int(cover_bonus_scaled.get_width() * deck_scale_factor),
-                                                 int(cover_bonus_scaled.get_height() * deck_scale_factor)))
+    # Scale from original to avoid blurriness, but use the correct base target width (280)
+    z_deck_width = int(280 * scale * deck_scale_factor)
+    z_deck_height = int(z_deck_width * 3 / 4)
+    bonus_deck_img = pygame.transform.smoothscale(cover_bonus_original, (z_deck_width, z_deck_height))
+    
     bonus_deck_rotated = pygame.transform.rotate(bonus_deck_img, 90)
     bonus_deck_rect = bonus_deck_rotated.get_rect(center=(die_center_x - deck_offset, die_center_y))
     screen.blit(bonus_deck_rotated, bonus_deck_rect.topleft)
 
     # Static Quiz Deck (Right)
     # Rotate -90 so the base faces the die (left)
-    quiz_deck_img = pygame.transform.smoothscale(cover_quiz_scaled,
-                                               (int(cover_quiz_scaled.get_width() * deck_scale_factor),
-                                                int(cover_quiz_scaled.get_height() * deck_scale_factor)))
+    z_qdeck_width = int(280 * scale * deck_scale_factor)
+    z_qdeck_height = int(z_qdeck_width * 3 / 4)
+    quiz_deck_img = pygame.transform.smoothscale(cover_quiz_original, (z_qdeck_width, z_qdeck_height))
+    
     quiz_deck_rotated = pygame.transform.rotate(quiz_deck_img, -90)
     quiz_deck_rect = quiz_deck_rotated.get_rect(center=(die_center_x + deck_offset, die_center_y))
     screen.blit(quiz_deck_rotated, quiz_deck_rect.topleft)
@@ -2141,11 +2230,12 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             current_x = start_x + (die_center_x - start_x) * scale_factor
             current_y = die_center_y
 
-            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
-            scaled_width = int(cover_bonus_scaled.get_width() * anim_scale)
-            scaled_height = int(cover_bonus_scaled.get_height() * anim_scale)
-            scaled_image = pygame.transform.smoothscale(cover_bonus_scaled, (scaled_width, scaled_height))
+            anim_scale = (0.45 + (1.0 - 0.45) * scale_factor) * camera_zoom
+            scaled_width = int(280 * anim_scale * scale)
+            scaled_height = int(scaled_width * 3 / 4)
+            scaled_image = pygame.transform.smoothscale(cover_bonus_original, (scaled_width, scaled_height))
             draw_card_with_shadow(scaled_image, (current_x, current_y), rotation, scale_factor)
+
         elif state == 'flipping':
             elapsed = time.time() - game_state['bonus_flip_start']
             t = elapsed / 0.5
@@ -2159,7 +2249,11 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             scaled_image = pygame.transform.smoothscale(img, (scaled_width, img.get_height()))
             draw_card_with_shadow(scaled_image, (die_center_x, die_center_y), 0, 1.0)
         elif state == 'showing':
-            draw_card_with_shadow(image, (die_center_x, die_center_y), 0, 1.0)
+            # Scale the result image by camera zoom too
+            z_width = int(image.get_width() * camera_zoom)
+            z_height = int(image.get_height() * camera_zoom)
+            scaled_image = pygame.transform.smoothscale(image, (z_width, z_height))
+            draw_card_with_shadow(scaled_image, (die_center_x, die_center_y), 0, 1.0)
         elif state == 'flipping_back':
             elapsed = time.time() - game_state['bonus_flip_back_start']
             t = elapsed / 0.5
@@ -2181,10 +2275,10 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             current_x = die_center_x + (end_x - die_center_x) * (1.0 - scale_factor)
             current_y = die_center_y
 
-            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
-            scaled_width = int(cover_bonus_scaled.get_width() * anim_scale)
-            scaled_height = int(cover_bonus_scaled.get_height() * anim_scale)
-            scaled_image = pygame.transform.smoothscale(cover_bonus_scaled, (scaled_width, scaled_height))
+            anim_scale = (0.45 + (1.0 - 0.45) * scale_factor) * camera_zoom
+            scaled_width = int(280 * anim_scale * scale)
+            scaled_height = int(scaled_width * 3 / 4)
+            scaled_image = pygame.transform.smoothscale(cover_bonus_original, (scaled_width, scaled_height))
             draw_card_with_shadow(scaled_image, (current_x, current_y), rotation, scale_factor)
 
 
@@ -2211,11 +2305,11 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             current_x = start_x + (die_center_x - start_x) * scale_factor
             current_y = die_center_y
             
-            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
-            width = int(quiz_width * anim_scale)
-            height = int(quiz_height * anim_scale)
+            anim_scale = (0.45 + (1.0 - 0.45) * scale_factor) * camera_zoom
+            width = int(320 * anim_scale * scale)
+            height = int(width * 3 / 4)
             
-            scaled_cover = pygame.transform.smoothscale(cover_quiz_scaled, (width, height))
+            scaled_cover = pygame.transform.smoothscale(cover_quiz_original, (width, height))
             draw_card_with_shadow(scaled_cover, (current_x, current_y), rotation, scale_factor)
             
             if elapsed >= 1.0:
@@ -2394,11 +2488,11 @@ def draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scale
             current_x = die_center_x + (end_x - die_center_x) * (1.0 - scale_factor)
             current_y = die_center_y
             
-            anim_scale = 0.45 + (1.0 - 0.45) * scale_factor
-            width = int(quiz_width * anim_scale)
-            height = int(quiz_height * anim_scale)
+            anim_scale = (0.45 + (1.0 - 0.45) * scale_factor) * camera_zoom
+            width = int(320 * anim_scale * scale)
+            height = int(width * 3 / 4)
             
-            scaled_cover = pygame.transform.smoothscale(cover_quiz_scaled, (width, height))
+            scaled_cover = pygame.transform.smoothscale(cover_quiz_original, (width, height))
             draw_card_with_shadow(scaled_cover, (current_x, current_y), rotation, scale_factor)
             
             if elapsed_shrink >= 1.0:
@@ -3908,7 +4002,7 @@ def main():
                             
                             current_player.has_rolled = True
 
-            dice_rect, restart_button_rect, achievement_button_rect, settings_button_rect, magnify_button_rect, quiz_answer_rects = draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, magnify_button_scaled, bonus_result_images_scaled)
+            dice_rect, restart_button_rect, achievement_button_rect, settings_button_rect, magnify_button_rect, quiz_answer_rects = draw_board(players, game_state, scale, offset_x, offset_y, tile_images_scaled, player_images_scaled, cpu_image_scaled, cpu_difficulty_images_scaled, dice_images_scaled, restart_button_scaled, settings_button_scaled, achievement_button_scaled, magnify_button_scaled, bonus_result_images_scaled)
 
             # Draw Achievements Pane if active
             if game_state.get('show_achievements_menu', False):
