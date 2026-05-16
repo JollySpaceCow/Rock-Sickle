@@ -10,6 +10,7 @@ venv/
 env/
 
 # OS noise
+Icon?
 .DS_Store
 
 # Logs
