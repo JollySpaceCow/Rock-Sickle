@@ -148,11 +148,69 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                             game_state['clicked_quiz_button'] = option_index
                             game_state['button_click_time'] = time.time()
                             quiz_tts.stop_quiz_tts()
-                            _, _, correct = game_state['quiz_question']
-                            if option_index == correct:
-                                apply_quiz_effect_func(current_player, True, game_state, scale)
-                            else:
-                                apply_quiz_effect_func(current_player, False, game_state, scale)
+                            # Store the answer to process after delay for visualization
+                            game_state['pending_quiz_answer'] = option_index
+                            game_state['quiz_answer_delay_start'] = time.time()
+            # Path selection handling with arrow keys
+            elif game_state.get('show_path_choice_after_roll', False) and 'path_buttons' in game_state:
+                current_player = players[game_state['current_player']]
+                if not current_player.is_computer:
+                    if event.key in [pygame.K_UP, pygame.K_LEFT, pygame.K_1]:
+                        # Select first path (West or North)
+                        if len(game_state['path_buttons']) > 0:
+                            button, choice = game_state['path_buttons'][0]
+                            game_state['clicked_path_button'] = 0
+                            game_state['path_button_click_time'] = time.time()
+                            current_player.path_choices[current_player.position] = choice
+                            remaining_spaces = game_state.get('spaces_remaining', 0)
+                            started_on_choice = isinstance(next_positions[current_player.position], list)
+                            movement_path = get_movement_path_with_choice_func(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
+                            anim = {
+                                'player': current_player,
+                                'path': movement_path,
+                                'index': 0,
+                                'last_time': time.time(),
+                                'message': f"Player {current_player.id + 1} chose path to {choice}. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
+                                'is_initial_move': True,
+                                'delay': 0.5
+                            }
+                            current_player.active_animations.append(anim)
+                            audio.indigogo_sound.play()
+                            game_state['show_path_choice_after_roll'] = False
+                            del game_state['path_buttons']
+                            if 'roll_for_path_choice' in game_state:
+                                del game_state['roll_for_path_choice']
+                            if 'spaces_remaining' in game_state:
+                                del game_state['spaces_remaining']
+                            current_player.has_rolled = True
+                    elif event.key in [pygame.K_DOWN, pygame.K_RIGHT, pygame.K_2]:
+                        # Select second path (South or West)
+                        if len(game_state['path_buttons']) > 1:
+                            button, choice = game_state['path_buttons'][1]
+                            game_state['clicked_path_button'] = 1
+                            game_state['path_button_click_time'] = time.time()
+                            current_player.path_choices[current_player.position] = choice
+                            remaining_spaces = game_state.get('spaces_remaining', 0)
+                            started_on_choice = isinstance(next_positions[current_player.position], list)
+                            movement_path = get_movement_path_with_choice_func(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
+                            anim = {
+                                'player': current_player,
+                                'path': movement_path,
+                                'index': 0,
+                                'last_time': time.time(),
+                                'message': f"Player {current_player.id + 1} chose path to {choice}. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
+                                'is_initial_move': True,
+                                'delay': 0.5
+                            }
+                            current_player.active_animations.append(anim)
+                            audio.indigogo_sound.play()
+                            game_state['show_path_choice_after_roll'] = False
+                            del game_state['path_buttons']
+                            if 'roll_for_path_choice' in game_state:
+                                del game_state['roll_for_path_choice']
+                            if 'spaces_remaining' in game_state:
+                                del game_state['spaces_remaining']
+                            current_player.has_rolled = True
             # Escape handling
             elif event.key == pygame.K_ESCAPE:
                 if game_state.get('show_achievements_menu', False):

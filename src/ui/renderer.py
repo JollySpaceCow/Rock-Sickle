@@ -27,6 +27,23 @@ from src.game.mechanics import get_movement_path, get_movement_path_with_choice
 logger = logging.getLogger()
 
 
+def _get_friendly_square_name(square_type):
+    """Convert internal square code to friendly display name."""
+    name_mapping = {
+        '1': 'Plus One',
+        '0': 'Safe Space',
+        '-2': 'Minus Two',
+        'J': 'Go To Jail',
+        'Q': 'Quiz Card',
+        'B': 'Bonus Card',
+        'F': 'Finish',
+        'P': 'Path Choice',
+        'FP': 'Safe Space',
+        'Go': 'Go',
+    }
+    return name_mapping.get(square_type, square_type)
+
+
 def _random_visible_dice_pos(screen, dice_face):
     margin = 10
     available_x = screen.get_width() - dice_face.get_width()
@@ -1573,7 +1590,11 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
         spaces_text = font.render(f"Remaining Spaces: {remaining_spaces}", True, (100, 0, 0))
         screen.blit(spaces_text, (rect.x + int(10 * scale), rect.y + int(32 * scale)))
 
-        labels = ["North", "West"]
+        # Use different labels for expert board
+        if game_state.get('selected_board') == 'Expert':
+            labels = ["West", "South"]
+        else:
+            labels = ["North", "West"]
         button_height = int(35 * scale)
         button_spacing = int(15 * scale)
         game_state['path_buttons'] = []
@@ -1606,7 +1627,8 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
             direction_text = font.render(f"{label} Path", True, BLACK)
             screen.blit(direction_text, (button.x + int(10 * scale), button.y + int(5 * scale)))
 
-            dest_text = font.render(f"Ends on: {end_square_type}", True, (100, 0, 0))
+            friendly_name = _get_friendly_square_name(end_square_type)
+            dest_text = font.render(f"Ends on: {friendly_name}", True, (100, 0, 0))
             screen.blit(dest_text, (button.x + int(130 * scale), button.y + int(5 * scale)))
 
             game_state['path_buttons'].append((button, choice))

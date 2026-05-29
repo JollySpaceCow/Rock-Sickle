@@ -1046,6 +1046,16 @@ def run_game_loop(layout_state, players, selected_board, saved_progress):
             current_player = players[game_state['current_player']]
             if current_player.is_computer:
                 cpu.handle_cpu_quiz(game_state, current_player, scale, apply_quiz_effect_func)
+            elif 'pending_quiz_answer' in game_state:
+                # Process human keyboard quiz answer after delay for visualization
+                if time.time() - game_state['quiz_answer_delay_start'] >= 0.8:
+                    option_index = game_state['pending_quiz_answer']
+                    _, _, correct = game_state['quiz_question']
+                    if option_index == correct:
+                        apply_quiz_effect_func(current_player, True, game_state, scale)
+                    else:
+                        apply_quiz_effect_func(current_player, False, game_state, scale)
+                    del game_state['pending_quiz_answer']
                 
         # CPU Bonus card interaction automation
         if 'bonus_image_state' in game_state and game_state['bonus_image_state'] == 'showing':
