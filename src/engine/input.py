@@ -39,6 +39,7 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
             saved_progress['settings']['show_timers'] = game_state.get('show_timers', False)
             saved_progress['settings']['speak_quiz_questions'] = game_state.get('speak_quiz_questions', True)
             saved_progress['settings']['speak_quiz_answers'] = game_state.get('speak_quiz_answers', True)
+            saved_progress['settings']['use_device_tts'] = game_state.get('use_device_tts', False)
             
             save_game_progress(saved_progress)
             keep_running = False
@@ -146,6 +147,7 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                         if option_index < len(game_state['quiz_buttons']):
                             game_state['clicked_quiz_button'] = option_index
                             game_state['button_click_time'] = time.time()
+                            quiz_tts.stop_quiz_tts()
                             _, _, correct = game_state['quiz_question']
                             if option_index == correct:
                                 apply_quiz_effect_func(current_player, True, game_state, scale)
@@ -184,7 +186,7 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                 
             if game_state.get('show_settings_menu', False):
                 menu_width = int(200 * scale)
-                menu_height = int(340 * scale)
+                menu_height = int(370 * scale)
                 menu_x = settings_button_rect.x + (settings_button_rect.width // 2) - (menu_width // 2)
                 menu_y = settings_button_rect.y - menu_height - int(10 * scale)
                 menu_rect = pygame.Rect(menu_x, menu_y, menu_width, menu_height)
@@ -206,6 +208,11 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                     if not game_state['speak_quiz_answers']:
                         quiz_tts.stop_answer_tts()
                     audio.connect_sound.play()
+                if 'tts_source_toggle_rect' in game_state and game_state['tts_source_toggle_rect'].collidepoint(pos):
+                    game_state['use_device_tts'] = not game_state.get('use_device_tts', False)
+                    quiz_tts.set_answer_source(game_state['use_device_tts'])
+                    quiz_tts.stop_answer_tts()
+                    audio.connect_sound.play()
                 if 'volume_slider_rect' in game_state and game_state['volume_slider_rect'].collidepoint(pos):
                     game_state['volume_drag_active'] = True
                     slider_rect = game_state['volume_slider_rect']
@@ -221,6 +228,8 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                     game_state['show_timers'] = False
                     game_state['speak_quiz_questions'] = True
                     game_state['speak_quiz_answers'] = True
+                    game_state['use_device_tts'] = False
+                    quiz_tts.set_answer_source(False)
                     audio.apply_master_volume(game_state['master_volume'])
                     audio.restart_sound.play()
                 if not menu_rect.collidepoint(pos) and not settings_button_rect.collidepoint(pos):
@@ -250,6 +259,7 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                     if button.collidepoint(pos):
                         game_state['clicked_quiz_button'] = option_index
                         game_state['button_click_time'] = time.time()
+                        quiz_tts.stop_quiz_tts()
                         _, _, correct = game_state['quiz_question']
                         if option_index == correct:
                             apply_quiz_effect_func(current_player, True, game_state, scale)

@@ -1,6 +1,6 @@
 import time
 import random
-from src.core import audio
+from src.core import audio, quiz_tts
 
 def handle_cpu_turn(game_state, players, squares_coords, JAIL_POS, move_player_func):
     """Handle the automated movement and actions of a CPU player on their turn.
@@ -10,36 +10,12 @@ def handle_cpu_turn(game_state, players, squares_coords, JAIL_POS, move_player_f
     current_player = players[game_state['current_player']]
     if current_player.is_computer and not current_player.has_rolled and not current_player.finished:
         if current_player.in_jail:
-            if current_player.has_jail_free_card:
-                current_player.in_jail = False
-                current_player.has_jail_free_card = False
+            message, moved = move_player_func(current_player, game_state)
+            game_state['message'] = message
+            if not current_player.in_jail:
                 current_player.jail_from_x = None
                 current_player.jail_from_y = None
                 current_player.jail_marker_anim_start = None
-                
-                anim = {
-                    'player': current_player,
-                    'start_pos': JAIL_POS,
-                    'end_pos': squares_coords[current_player.prev_position],
-                    'steps': 60,
-                    'current_step': 0,
-                    'last_time': time.time(),
-                    'message': f"CPU Player {current_player.id + 1} used Get Out of Jail Free card!",
-                    'is_jail_move': True,
-                    'delay': 0.0167,
-                    'jail_action': 'exit'
-                }
-                audio.head_shake_cpu_sound.play()
-                current_player.active_animations.append(anim)
-                game_state['message'] = f"CPU Player {current_player.id + 1} used Get Out of Jail Free card!"
-                current_player.turn_ended = True
-            else:
-                message, moved = move_player_func(current_player, game_state)
-                game_state['message'] = message
-                if not current_player.in_jail:
-                    current_player.jail_from_x = None
-                    current_player.jail_from_y = None
-                    current_player.jail_marker_anim_start = None
         else:
             message, moved = move_player_func(current_player, game_state)
             game_state['message'] = message
@@ -70,6 +46,7 @@ def handle_cpu_quiz(game_state, current_player, scale, apply_quiz_effect_func):
                 
                 game_state['clicked_quiz_button'] = selected_option
                 game_state['button_click_time'] = time.time()
+                quiz_tts.stop_quiz_tts()
                 
                 game_state['cpu_splash_delay'] = time.time() + 1.0
                 game_state['cpu_splash_option'] = selected_option

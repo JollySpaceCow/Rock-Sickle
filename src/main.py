@@ -1,10 +1,10 @@
 import pygame
 import sys
-import os
 import logging
 import time
 from src.core import audio, quiz_tts
 from src.core.assets import initialise_all_assets, load_asset
+from src.core.paths import get_log_file_path
 from src.core.progress import load_game_progress
 from src.constants import ORIGINAL_WIDTH, ORIGINAL_HEIGHT
 from src.game.player import Player
@@ -12,12 +12,21 @@ from src.game.board import get_classic_squares_coords, get_expert_squares_coords
 from src.ui import menus
 from src.engine.loop import run_game_loop
 
-# Set up logging for debug purposes
-logging.basicConfig(
-    filename=os.path.join(os.path.abspath(os.path.dirname(os.path.dirname(__file__))), "rock_sickle.log"),
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+def configure_logging():
+    """Set up logging without letting file permissions stop the game launching."""
+    try:
+        handler = logging.FileHandler(get_log_file_path())
+    except OSError:
+        handler = logging.StreamHandler()
+
+    logging.basicConfig(
+        handlers=[handler],
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+
+configure_logging()
 logger = logging.getLogger()
 
 def main():

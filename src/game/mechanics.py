@@ -24,8 +24,7 @@ def get_movement_path(start_pos, spaces, game_state, squares, next_positions, in
     if in_jail:
         return path
     for i in range(spaces):
-        if current_pos >= len(squares) - 1:
-            path.append(len(squares) - 1)
+        if current_pos >= len(squares) - 1 or squares[current_pos] == 'F':
             break
         next_pos = next_positions[current_pos]
         if isinstance(next_pos, list):
@@ -66,8 +65,7 @@ def get_movement_path_with_choice(start_pos, choice, remaining_spaces, squares, 
     
     # Move remaining spaces from the chosen path
     for _ in range(spaces_to_move):
-        if current_pos >= len(squares) - 1:
-            path.append(len(squares) - 1)
+        if current_pos >= len(squares) - 1 or squares[current_pos] == 'F':
             break
         next_pos = next_positions[current_pos]
         if isinstance(next_pos, list):

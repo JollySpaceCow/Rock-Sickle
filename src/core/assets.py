@@ -220,6 +220,7 @@ def initialise_all_assets():
             'expert_jail3': "Assets/Images/Bonus Card Results Expert/Go To Jail 3.png",
             'expert_jail4': "Assets/Images/Bonus Card Results Expert/Go To Jail 4.png",
             'expert_jail_free': "Assets/Images/Bonus Card Results Expert/Jail Free.png",
+            'expert_jail_free_micro': "Assets/Images/Bonus Card Results Expert/Jail Free Micro.png",
         }
         AssetRegistry.bonus_result_images_original = {}
         for key, path in bonus_result_paths.items():

@@ -4,6 +4,8 @@ import logging
 
 logger = logging.getLogger()
 
+SOUND_EFFECTS_DIR = "Assets/Audio/Sound Effects"
+
 # Audio variables
 pong_sound = None
 voltage_easy_sound = None
@@ -30,6 +32,8 @@ mac_os_uh_ohh_sound = None
 wobble_sound = None
 fairlin_round1_sound = None
 restart_sound = None
+finished_sound = None
+woosh_sound = None
 car_horn_sound = None
 bonk_cpu_sound = None
 glug_cpu_sound = None
@@ -37,6 +41,7 @@ head_shake_cpu_sound = None
 jump_cpu_sound = None
 whiz_cpu_sound = None
 wobble_cpu_sound = None
+doubles_sound = None
 
 def init_audio():
     """Initialize and load all audio assets."""
@@ -45,49 +50,52 @@ def init_audio():
     global bonk_sound, head_shake_sound, whiz_sound, drip_drop_sound, drum_machine_sound
     global win_sound, pop_sound, bing_bong_sound, disconnect_sound, indigogo_sound
     global jump_sound, mac_os_dinbg_sound, mac_os_uh_ohh_sound, wobble_sound
-    global fairlin_round1_sound, restart_sound, car_horn_sound
-    global bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound, jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound
+    global fairlin_round1_sound, restart_sound, finished_sound, woosh_sound, car_horn_sound
+    global bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound, jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound
 
     try:
         # Menus
-        pong_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Pong (Player Not Set).wav"))
-        voltage_easy_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage (Easy CPU Player Selected).wav"))
-        voltage_normal_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage2 (Normal CPU Player Selected).wav"))
-        voltage_hard_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Voltage3 (Hard CPU Player Selected).wav"))
-        whit_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Whit (Player Set).wav"))
-        connect_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Connect.wav"))
-        super_mario_sound = pygame.mixer.Sound(load_asset("Assets/Audio/super_mario_64_soundtrack_correct_solution (Amount of Players has been Chosen).wav"))
+        pong_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Pong (Player Not Set).wav"))
+        voltage_easy_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Voltage (Easy CPU Player Selected).wav"))
+        voltage_normal_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Voltage2 (Normal CPU Player Selected).wav"))
+        voltage_hard_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Voltage3 (Hard CPU Player Selected).wav"))
+        whit_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Whit (Player Set).wav"))
+        connect_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Connect.wav"))
+        super_mario_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/super_mario_64_soundtrack_correct_solution (Amount of Players has been Chosen).wav"))
         
         # Gameplay
-        roll_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drum Roll (Roll the Dice).wav"))
-        glug_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Glug (Moving).wav"))
-        bonk_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Bonk (Stay In Jail).wav"))
-        head_shake_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Head Shake (Exit Jail).wav"))
-        whiz_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Whiz2 (Moving to Jail).wav"))
-        drip_drop_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drip Drop (Pick up Bonus Card).wav"))
-        drum_machine_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Drum Machine (Pick up Quiz Card).wav"))
-        win_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Odesong (Win).wav"))
-        pop_sound = pygame.mixer.Sound(load_asset("Assets/Audio/pop (Anser Buttons Appear).wav"))
-        bing_bong_sound = pygame.mixer.Sound(load_asset("Assets/Audio/bing_bong (Incorrect Quiz Answer).wav"))
-        disconnect_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Disconnect (Put Card Away).wav"))
-        indigogo_sound = pygame.mixer.Sound(load_asset("Assets/Audio/indigogo (Path Chosen).wav"))
-        jump_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Jump (Forward a Space).wav"))
-        mac_os_dinbg_sound = pygame.mixer.Sound(load_asset("Assets/Audio/mac_os_dinbg (Quiz Answer Correct).wav"))
-        mac_os_uh_ohh_sound = pygame.mixer.Sound(load_asset("Assets/Audio/mac_os_uh_ohh (Sent to Jail by Bonus Card).wav"))
-        wobble_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Wobble (Back a Space).wav"))
-        fairlin_round1_sound = pygame.mixer.Sound(load_asset("Assets/Audio/SE1_EVT_FAIRLIN_ROUND1 (Win).wav"))
-        restart_sound = pygame.mixer.Sound(load_asset("Assets/Audio/SE4_F_MAWASU_ROUND1.wav"))
+        roll_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Drum Roll (Roll the Dice).wav"))
+        glug_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Glug (Moving).wav"))
+        bonk_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Bonk (Stay In Jail).wav"))
+        head_shake_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Head Shake (Exit Jail).wav"))
+        whiz_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Whiz2 (Moving to Jail).wav"))
+        drip_drop_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Drip Drop (Pick up Bonus Card).wav"))
+        drum_machine_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Drum Machine (Pick up Quiz Card).wav"))
+        win_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Odesong (Win).wav"))
+        pop_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/pop (Anser Buttons Appear).wav"))
+        bing_bong_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/bing_bong (Incorrect Quiz Answer).wav"))
+        disconnect_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Disconnect (Put Card Away).wav"))
+        indigogo_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/indigogo (Path Chosen).wav"))
+        jump_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Jump (Forward a Space).wav"))
+        mac_os_dinbg_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/mac_os_dinbg (Quiz Answer Correct).wav"))
+        mac_os_uh_ohh_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/mac_os_uh_ohh (Sent to Jail by Bonus Card).wav"))
+        wobble_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Wobble (Back a Space).wav"))
+        fairlin_round1_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/SE1_EVT_FAIRLIN_ROUND1 (Win).wav"))
+        restart_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/SE4_F_MAWASU_ROUND1.wav"))
+        finished_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Finished.mp3"))
+        woosh_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Woosh.mp3"))
+        doubles_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Doubles.mp3"))
         
         # New sound effects
-        car_horn_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Car Horn.wav"))
+        car_horn_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Car Horn.wav"))
         
         # CPU player sound variations
-        bonk_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/BonkCPU.wav"))
-        glug_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/GlugCPU.wav"))
-        head_shake_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Head ShakeCPU.wav"))
-        jump_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/JumpCPU.wav"))
-        whiz_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/WhizCPU.wav"))
-        wobble_cpu_sound = pygame.mixer.Sound(load_asset("Assets/Audio/WobbleCPU.wav"))
+        bonk_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/BonkCPU.wav"))
+        glug_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/GlugCPU.wav"))
+        head_shake_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Head ShakeCPU.wav"))
+        jump_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/JumpCPU.wav"))
+        whiz_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/WhizCPU.wav"))
+        wobble_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/WobbleCPU.wav"))
         
         logger.info("Audio assets loaded successfully")
     except Exception as e:
@@ -105,9 +113,9 @@ def apply_master_volume(volume):
         bing_bong_sound, connect_sound, disconnect_sound, indigogo_sound,
         jump_sound, mac_os_dinbg_sound, mac_os_uh_ohh_sound, super_mario_sound,
         wobble_sound, fairlin_round1_sound, pong_sound, voltage_easy_sound,
-        voltage_normal_sound, voltage_hard_sound, whit_sound, restart_sound,
+        voltage_normal_sound, voltage_hard_sound, whit_sound, restart_sound, finished_sound, woosh_sound,
         car_horn_sound, bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound,
-        jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound
+        jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound
     ]
     for sound in sounds:
         if sound is not None:

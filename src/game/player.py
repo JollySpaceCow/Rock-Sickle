@@ -38,3 +38,4 @@ class Player:
         
         # Add jail free card flag
         self.has_jail_free_card = False
+        self.jail_free_card_visible = False

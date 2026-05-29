@@ -27,6 +27,20 @@ from src.game.mechanics import get_movement_path, get_movement_path_with_choice
 logger = logging.getLogger()
 
 
+def _random_visible_dice_pos(screen, dice_face):
+    margin = 10
+    available_x = screen.get_width() - dice_face.get_width()
+    available_y = screen.get_height() - dice_face.get_height()
+    if available_x <= 0 or available_y <= 0:
+        return max(0, available_x // 2), max(0, available_y // 2)
+
+    min_x = margin if available_x >= margin * 2 else 0
+    min_y = margin if available_y >= margin * 2 else 0
+    max_x = available_x - margin if available_x >= margin * 2 else available_x
+    max_y = available_y - margin if available_y >= margin * 2 else available_y
+    return random.randint(min_x, max_x), random.randint(min_y, max_y)
+
+
 def _draw_secret_pathway_rails(screen, squares_coords, scale, game_state, camera_zoom):
     """Draw paired black rails along the Secret board spiral path (one rail per side)."""
     if len(squares_coords) < 2:
@@ -282,6 +296,25 @@ def draw_card_with_shadow(screen, surf, pos, rot, scale, scale_val):
 
     card_rect = rotated_surf.get_rect(center=pos)
     screen.blit(rotated_surf, card_rect.topleft)
+
+def draw_jail_free_micro_card(screen, pos, scale, camera_zoom, alpha=255):
+    """Draw the held jail-free card at token scale."""
+    image = AssetRegistry.bonus_result_images_original.get('expert_jail_free_micro')
+    if image is None:
+        return
+
+    card_width = max(12, int(28 * scale * camera_zoom))
+    card_height = max(9, int(card_width * image.get_height() / image.get_width()))
+    card = pygame.transform.smoothscale(image, (card_width, card_height))
+    if alpha < 255:
+        card.set_alpha(alpha)
+
+    shadow = card.copy()
+    shadow.fill((0, 0, 0, 120), special_flags=pygame.BLEND_RGBA_MULT)
+    shadow_rect = shadow.get_rect(center=(pos[0] + int(2 * scale), pos[1] + int(2 * scale)))
+    card_rect = card.get_rect(center=pos)
+    screen.blit(shadow, shadow_rect.topleft)
+    screen.blit(card, card_rect.topleft)
 
 def draw_player_badge(screen, player, badge_pos, badge_size, player_colours, cpu_difficulty_images_scaled, cpu_image_scaled, player_images_scaled):
     """Helper for drawing player badge on quiz card."""
@@ -612,11 +645,11 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
             if is_expert_board:
                 for _ in range(2):
                     dice_face = random.choice(current_dice_images)
-                    rand_x, rand_y = camera.transform_coords(random.randint(100, screen.get_width() - 100), random.randint(100, screen.get_height() - 100), scale, game_state, screen.get_width(), screen.get_height())
+                    rand_x, rand_y = _random_visible_dice_pos(screen, dice_face)
                     screen.blit(dice_face, (rand_x, rand_y))
             else:
                 dice_face = random.choice(current_dice_images)
-                rand_x, rand_y = camera.transform_coords(random.randint(100, screen.get_width() - 100), random.randint(100, screen.get_height() - 100), scale, game_state, screen.get_width(), screen.get_height())
+                rand_x, rand_y = _random_visible_dice_pos(screen, dice_face)
                 screen.blit(dice_face, (rand_x, rand_y))
         else:
             roll = game_state['dice_roll']
@@ -636,7 +669,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
                 game_state['final_dice_roll_2'] = roll2
                 
                 if game_state.get('is_doubles') and not game_state.get('doubles_sound_played', False):
-                    stylish_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Stylish.opus"))
+                    stylish_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Sound Effects/Stylish.opus"))
                     stylish_sound.set_volume(0.5)
                     stylish_sound.play()
                     game_state['doubles_sound_played'] = True
@@ -672,33 +705,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
             current_player = players[game_state['current_player']]
             current_player.position_history.append(current_player.position)
             if current_player.in_jail:
-                if current_player.has_jail_free_card:
-                    current_player.in_jail = False
-                    current_player.has_jail_free_card = False
-                    current_player.jail_from_x = None
-                    current_player.jail_from_y = None
-                    current_player.jail_marker_anim_start = None
-                    
-                    anim = {
-                        'player': current_player,
-                        'start_pos': jail_pos,
-                        'end_pos': squares_coords[current_player.prev_position],
-                        'steps': 60,
-                        'current_step': 0,
-                        'last_time': time.time(),
-                        'message': f"Player {current_player.id + 1} used Get Out of Jail Free card!",
-                        'is_jail_move': True,
-                        'delay': 0.0167,
-                        'jail_action': 'exit'
-                    }
-                    if current_player.is_computer:
-                        audio.head_shake_cpu_sound.play()
-                    else:
-                        audio.head_shake_sound.play()
-                    current_player.active_animations.append(anim)
-                    game_state['message'] = f"Player {current_player.id + 1} used Get Out of Jail Free card!"
-                    current_player.turn_ended = True
-                elif roll % 2 == 0:
+                if roll % 2 == 0:
                     current_player.in_jail = False
                     current_player.jail_from_x = None
                     current_player.jail_from_y = None
@@ -869,7 +876,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
                     else:
                         screen.blit(img, (x - img.get_width() // 2, y - img.get_height() // 2))
             else:
-                if len(players) > 1 and player.id == current_player.id:
+                if player.id == current_player.id:
                     shadow_surface = pygame.Surface((img.get_width(), img.get_height()), pygame.SRCALPHA)
                     shadow_offset_x = 3
                     shadow_offset_y = 3
@@ -897,6 +904,16 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
                     screen.blit(transparent_img, (x - img.get_width() // 2, y - img.get_height() // 2))
                 else:
                     screen.blit(img, (x - img.get_width() // 2, y - img.get_height() // 2))
+
+            if player.has_jail_free_card and getattr(player, 'jail_free_card_visible', False):
+                micro_offset_x = img.get_width() // 2 + int(12 * scale * camera_zoom)
+                micro_offset_y = -img.get_height() // 2
+                draw_jail_free_micro_card(
+                    screen,
+                    (x + micro_offset_x, y + micro_offset_y),
+                    scale,
+                    camera_zoom
+                )
 
     next_id = (game_state['current_player'] + 1) % len(players)
     while next_id < len(players) and players[next_id].finished and len(game_state.get('finish_order', [])) < len(players):
@@ -949,7 +966,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
     # Settings panel overlays
     if game_state.get('show_settings_menu', False):
         menu_width = int(200 * scale)
-        menu_height = int(340 * scale)
+        menu_height = int(370 * scale)
         
         menu_x = settings_button_rect.x + (settings_button_rect.width // 2) - (menu_width // 2)
         menu_y = settings_button_rect.y - menu_height - int(10 * scale)
@@ -1046,13 +1063,27 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
         
         game_state['answers_toggle_rect'] = answers_toggle_rect
+
+        source_text = status_font.render("Device TTS:", True, (0, 0, 0))
+        screen.blit(source_text, (menu_x + int(10 * scale), menu_y + int(205 * scale)))
+
+        tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(205 * scale), toggle_width, toggle_height)
+
+        toggle_color = (100, 200, 100) if game_state.get('use_device_tts', False) else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_color, tts_source_toggle_rect, border_radius=int(10 * scale))
+
+        handle_pos = tts_source_toggle_rect.right - int(18 * scale) if game_state.get('use_device_tts', False) else tts_source_toggle_rect.left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, tts_source_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+
+        game_state['tts_source_toggle_rect'] = tts_source_toggle_rect
         
         volume_text = status_font.render("Master Volume:", True, (0, 0, 0))
-        screen.blit(volume_text, (menu_x + int(10 * scale), menu_y + int(205 * scale)))
+        screen.blit(volume_text, (menu_x + int(10 * scale), menu_y + int(235 * scale)))
         
         slider_width = int(150 * scale)
         slider_height = int(10 * scale)
-        slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(230 * scale), slider_width, slider_height)
+        slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, slider_height)
         
         pygame.draw.rect(screen, (150, 150, 150), slider_rect, border_radius=int(5 * scale))
         
@@ -1067,7 +1098,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
         reset_button_width = int(150 * scale)
         reset_button_height = int(30 * scale)
         reset_button_x = menu_x + (menu_width - reset_button_width) // 2
-        reset_button_y = menu_y + int(270 * scale)
+        reset_button_y = menu_y + int(300 * scale)
         reset_button_rect = pygame.Rect(reset_button_x, reset_button_y, reset_button_width, reset_button_height)
         
         pygame.draw.rect(screen, (220, 220, 220), reset_button_rect, border_radius=int(5 * scale))
@@ -1229,6 +1260,26 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
             z_height = int(image.get_height() * camera_zoom)
             scaled_image = pygame.transform.smoothscale(image, (z_width, z_height))
             draw_card_with_shadow(screen, scaled_image, (die_center_x, die_center_y), 0, scale, 1.0)
+        elif state == 'gliding_to_player':
+            elapsed = time.time() - game_state['bonus_glide_start']
+            progress = min(1.0, elapsed / 1.0)
+            t = 1.0 - (1.0 - progress) * (1.0 - progress)
+            target_player_id = game_state.get('bonus_target_player_id', game_state['current_player'])
+            target_player = next((p for p in players if p.id == target_player_id), players[game_state['current_player']])
+            target_x, target_y = camera.transform_coords(
+                target_player.current_x,
+                target_player.current_y,
+                scale,
+                game_state,
+                screen.get_width(),
+                screen.get_height()
+            )
+            target_x += int(28 * scale * camera_zoom)
+            target_y -= int(18 * scale * camera_zoom)
+
+            current_x = die_center_x + (target_x - die_center_x) * t
+            current_y = die_center_y + (target_y - die_center_y) * t
+            draw_jail_free_micro_card(screen, (current_x, current_y), scale, camera_zoom)
         elif state == 'flipping_back':
             elapsed = time.time() - game_state['bonus_flip_back_start']
             t = elapsed / 0.5
@@ -1345,7 +1396,8 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
                 game_state['quiz_tts_started'] = True
                 if game_state.get('speak_quiz_answers', True):
                     _, options, _ = game_state['quiz_question']
-                    quiz_tts.queue_answers(options)
+                    is_expert = game_state.get('selected_board') == 'Expert'
+                    quiz_tts.queue_answers(options, is_expert)
             rect = pygame.Rect(die_center_x - quiz_width // 2, die_center_y - quiz_height // 2, quiz_width, quiz_height)
             shadow_offset = int(12 * scale)
             shadow_rect = rect.copy()

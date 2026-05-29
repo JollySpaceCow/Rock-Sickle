@@ -1,13 +1,9 @@
 import os
 import json
 import logging
+from src.core.paths import get_legacy_progress_file_path, get_progress_file_path
 
 logger = logging.getLogger()
-
-def get_progress_file_path():
-    """Get path to the game progress file."""
-    # Store in same directory as the root script
-    return os.path.join(os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "rock_sickle_progress.json")
 
 def load_game_progress():
     """Load game progress and settings from file and ensure all keys exist."""
@@ -33,14 +29,21 @@ def load_game_progress():
             "use_modern_status_display": True,
             "show_timers": False,
             "speak_quiz_questions": True,
-            "speak_quiz_answers": True
+            "speak_quiz_answers": True,
+            "use_device_tts": False
         }
     }
     
     try:
         progress_path = get_progress_file_path()
-        if os.path.exists(progress_path):
-            with open(progress_path, 'r') as f:
+        legacy_progress_path = get_legacy_progress_file_path()
+        load_path = progress_path
+
+        if not os.path.exists(progress_path) and os.path.exists(legacy_progress_path):
+            load_path = legacy_progress_path
+
+        if os.path.exists(load_path):
+            with open(load_path, 'r') as f:
                 loaded = json.load(f)
                 # Merge loaded progress into defaults to handle missing keys
                 for key, value in loaded.items():
@@ -48,6 +51,8 @@ def load_game_progress():
                         defaults[key].update(value)
                     else:
                         defaults[key] = value
+                if load_path == legacy_progress_path:
+                    save_game_progress(defaults)
                 return defaults
     except Exception as e:
         logger.error(f"Error loading game progress: {e}")
@@ -58,8 +63,10 @@ def save_game_progress(progress):
     """Save game progress to file."""
     try:
         progress_path = get_progress_file_path()
-        with open(progress_path, 'w') as f:
+        temp_path = f"{progress_path}.tmp"
+        with open(temp_path, 'w') as f:
             json.dump(progress, f)
+        os.replace(temp_path, progress_path)
     except Exception as e:
         logger.error(f"Error saving game progress: {e}")
 
