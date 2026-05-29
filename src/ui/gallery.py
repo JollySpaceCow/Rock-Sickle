@@ -41,7 +41,7 @@ def render_achievements_pane(screen, scale, offset_x, offset_y, board_type="Clas
     
     # Pane sizing and positioning
     pane_width = int(600 * scale)
-    pane_height = int(450 * scale)
+    pane_height = int(520 * scale)
     pane_x = int((screen.get_width() // 2) - (pane_width // 2))
     pane_y = int((screen.get_height() // 2) - (pane_height // 2))
     pane_rect = pygame.Rect(pane_x, pane_y, pane_width, pane_height)
@@ -84,6 +84,10 @@ def render_achievements_pane(screen, scale, offset_x, offset_y, board_type="Clas
             current_val = 1 if game_progress.get("expert_board_completed", False) else 0
         elif stat_name == "secret_board_completed":
             current_val = 1 if game_progress.get("secret_board_completed", False) else 0
+        elif stat_name == "classic_no_jail_completed":
+            current_val = 1 if game_progress.get("classic_no_jail_completed", False) else 0
+        elif stat_name == "expert_no_jail_completed":
+            current_val = 1 if game_progress.get("expert_no_jail_completed", False) else 0
             
         # Ensure current value doesn't exceed target for the display
         display_val = min(current_val, target_val)

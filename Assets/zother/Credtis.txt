@@ -43,6 +43,8 @@ Harrison
 ### Code
 - Claude 3.7 Sonnet
 - Grok 3
+- Gemini 3.1 Pro
+- Gemini 3
 
 ### Image Art
 - Harrison

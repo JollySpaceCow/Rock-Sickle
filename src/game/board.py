@@ -1,9 +1,16 @@
 import random
 
+# Cache randomised secret board to prevent flashing on rendering
+# Complies with Australian English spelling conventions
+_cached_secret_squares = None
+_cached_secret_next_positions = None
+
 # Define a small gap between squares (represents 1mm)
 GAP_BETWEEN_TILES = 2  # Pixels representing gap between tiles
 
 def get_board_squares(board_type="Classic"):
+    global _cached_secret_squares, _cached_secret_next_positions
+    
     if board_type == "Classic":
         return [
             'Go', '1', '0', 'Q', '-2', 'J', '1', 'B', '0', '0',
@@ -14,6 +21,13 @@ def get_board_squares(board_type="Classic"):
             'F'
         ], list(range(1, 23)) + [[23, 30]] + list(range(24, 30)) + [37] + list(range(31, 37)) + [37] + [None]
     elif board_type == "Secret":
+        if _cached_secret_squares is not None:
+            return _cached_secret_squares, _cached_secret_next_positions
+            
+        # Initialise seed-based random generator to ensure consistency
+        # Complies with Australian English spelling conventions
+        local_random = random.Random("secret")
+        
         # Create a 1000-space secret board with a winding pattern
         secret_squares = ['Go']
         
@@ -24,21 +38,26 @@ def get_board_squares(board_type="Classic"):
         # Generate 998 spaces with weighted random distribution, avoiding problematic sequences
         prev_two_squares = []  # Keep track of the last two squares
         
-        for _ in range(998):
+        for i in range(998):
+            # For the first two spaces (index 1 and 2), do not allow '-2' to avoid going back to Go
+            if i < 2:
+                valid_types = [t for t in square_types if t != '-2']
+                valid_weights = [weights[square_types.index(t)] for t in valid_types]
+                space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
             # Prevent problematic sequences like "1, 1, -2" that could cause softlocks
-            if len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['1', '1']:
+            elif len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['1', '1']:
                 # If we have "1, 1", don't allow "-2" next
                 valid_types = [t for t in square_types if t != '-2']
                 valid_weights = [weights[square_types.index(t)] for t in valid_types]
-                space_type = random.choices(valid_types, weights=valid_weights, k=1)[0]
+                space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
             elif len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['-2', '-2']:
                 # If we have "-2, -2", don't allow another "-2" to avoid excessive backtracking
                 valid_types = [t for t in square_types if t != '-2']
                 valid_weights = [weights[square_types.index(t)] for t in valid_types]
-                space_type = random.choices(valid_types, weights=valid_weights, k=1)[0]
+                space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
             else:
                 # Normal random selection
-                space_type = random.choices(square_types, weights=weights, k=1)[0]
+                space_type = local_random.choices(square_types, weights=weights, k=1)[0]
             
             # Add the selected space type
             secret_squares.append(space_type)
@@ -54,7 +73,10 @@ def get_board_squares(board_type="Classic"):
         # Simple sequential next positions (no branching paths)
         secret_next_positions = list(range(1, 1000)) + [None]
         
-        return secret_squares, secret_next_positions
+        _cached_secret_squares = secret_squares
+        _cached_secret_next_positions = secret_next_positions
+        
+        return _cached_secret_squares, _cached_secret_next_positions
     else:  # Expert board
         # Properly structured expert board based on Kong.rtf
         expert_squares = []
@@ -299,7 +321,8 @@ def get_secret_squares_coords():
     center_x, center_y = 350, 300
     
     # Use a fixed spacing between tiles to prevent overlaps
-    fixed_spacing = 18  # Consistent spacing between points
+    # Spacing of 16 allows all 1000 squares to fit within screen bounds without clamping
+    fixed_spacing = 16  # Consistent spacing between points
     
     # Generate coordinates using a spiral pattern with consistent spacing
     # This will create an outward spiral from the center
@@ -331,10 +354,6 @@ def get_secret_squares_coords():
             dx, dy = directions[direction_index]
             x += dx * step_size
             y += dy * step_size
-            
-            # Ensure we stay within bounds (prevent going off-screen)
-            x = max(20, min(680, x))
-            y = max(20, min(580, y))
             
             # Add point to our list
             spiral_points.append((int(x), int(y)))

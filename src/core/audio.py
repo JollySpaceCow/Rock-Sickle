@@ -97,6 +97,8 @@ def init_audio():
 
 def apply_master_volume(volume):
     """Update all sound volumes based on the master volume setting (0.0 to 1.0)."""
+    from src.core import quiz_tts
+    quiz_tts.set_volume(volume)
     sounds = [
         roll_sound, glug_sound, bonk_sound, head_shake_sound, whiz_sound,
         drip_drop_sound, drum_machine_sound, win_sound, pop_sound,

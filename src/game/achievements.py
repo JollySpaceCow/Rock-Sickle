@@ -46,7 +46,21 @@ ACHIEVEMENTS = [
         "description": "Win a game where a Hard CPU player is competing.",
         "requirement": {"stat": "hard_cpu_defeats", "value": 1},
         "reward": "Gallery Entry: Silicon Tears"
-    }
+    },
+    {
+        "id": "jail_free_classic",
+        "title": "Clean Classic Run",
+        "description": "Complete the Classic board without any player going to jail.",
+        "requirement": {"stat": "classic_no_jail_completed", "value": 1},
+        "reward": "Gallery Entry: The Straight Path"
+    },
+    {
+        "id": "jail_free_expert",
+        "title": "Clean Expert Run",
+        "description": "Complete the Expert board without any player going to jail.",
+        "requirement": {"stat": "expert_no_jail_completed", "value": 1},
+        "reward": "Gallery Entry: No Detours"
+    },
 ]
 
 def check_achievement_completion(progress):
@@ -77,6 +91,10 @@ def check_achievement_completion(progress):
             current_val = 1 if progress.get("expert_board_completed", False) else 0
         elif stat_name == "secret_board_completed":
             current_val = 1 if progress.get("secret_board_completed", False) else 0
+        elif stat_name == "classic_no_jail_completed":
+            current_val = 1 if progress.get("classic_no_jail_completed", False) else 0
+        elif stat_name == "expert_no_jail_completed":
+            current_val = 1 if progress.get("expert_no_jail_completed", False) else 0
             
         if current_val >= target_val:
             newly_completed.append(achievement["id"])

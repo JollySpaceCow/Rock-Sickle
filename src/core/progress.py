@@ -15,6 +15,8 @@ def load_game_progress():
         "classic_board_completed": False,
         "expert_board_completed": False,
         "secret_board_completed": False,
+        "classic_no_jail_completed": False,
+        "expert_no_jail_completed": False,
         "unlocked_boards": ["Classic"],
         "completed_games": 0,
         "completed_achievements": [],
@@ -29,7 +31,9 @@ def load_game_progress():
             "master_volume": 1.0,
             "show_game_status": False,
             "use_modern_status_display": True,
-            "show_timers": False
+            "show_timers": False,
+            "speak_quiz_questions": True,
+            "speak_quiz_answers": True
         }
     }
     
