@@ -161,62 +161,34 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                             button, choice = game_state['path_buttons'][0]
                             game_state['clicked_path_button'] = 0
                             game_state['path_button_click_time'] = time.time()
-                            current_player.path_choices[current_player.position] = choice
-                            remaining_spaces = game_state.get('spaces_remaining', 0)
-                            started_on_choice = isinstance(next_positions[current_player.position], list)
-                            movement_path = get_movement_path_with_choice_func(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
-                            anim = {
-                                'player': current_player,
-                                'path': movement_path,
-                                'index': 0,
-                                'last_time': time.time(),
-                                'message': f"Player {current_player.id + 1} chose path to {choice}. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
-                                'is_initial_move': True,
-                                'delay': 0.5
-                            }
-                            current_player.active_animations.append(anim)
-                            audio.indigogo_sound.play()
-                            game_state['show_path_choice_after_roll'] = False
-                            del game_state['path_buttons']
-                            if 'roll_for_path_choice' in game_state:
-                                del game_state['roll_for_path_choice']
-                            if 'spaces_remaining' in game_state:
-                                del game_state['spaces_remaining']
-                            current_player.has_rolled = True
+                            # Store pending path choice to process after delay for visualization
+                            game_state['pending_path_choice'] = choice
+                            game_state['pending_path_index'] = 0
+                            game_state['path_choice_delay_start'] = time.time()
                     elif event.key in [pygame.K_DOWN, pygame.K_RIGHT, pygame.K_2]:
                         # Select second path (South or West)
                         if len(game_state['path_buttons']) > 1:
                             button, choice = game_state['path_buttons'][1]
                             game_state['clicked_path_button'] = 1
                             game_state['path_button_click_time'] = time.time()
-                            current_player.path_choices[current_player.position] = choice
-                            remaining_spaces = game_state.get('spaces_remaining', 0)
-                            started_on_choice = isinstance(next_positions[current_player.position], list)
-                            movement_path = get_movement_path_with_choice_func(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
-                            anim = {
-                                'player': current_player,
-                                'path': movement_path,
-                                'index': 0,
-                                'last_time': time.time(),
-                                'message': f"Player {current_player.id + 1} chose path to {choice}. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
-                                'is_initial_move': True,
-                                'delay': 0.5
-                            }
-                            current_player.active_animations.append(anim)
-                            audio.indigogo_sound.play()
-                            game_state['show_path_choice_after_roll'] = False
-                            del game_state['path_buttons']
-                            if 'roll_for_path_choice' in game_state:
-                                del game_state['roll_for_path_choice']
-                            if 'spaces_remaining' in game_state:
-                                del game_state['spaces_remaining']
-                            current_player.has_rolled = True
+                            # Store pending path choice to process after delay for visualization
+                            game_state['pending_path_choice'] = choice
+                            game_state['pending_path_index'] = 1
+                            game_state['path_choice_delay_start'] = time.time()
             # Escape handling
             elif event.key == pygame.K_ESCAPE:
                 if game_state.get('show_achievements_menu', False):
                     game_state['show_achievements_menu'] = False
                 elif game_state.get('show_settings_menu', False):
                     game_state['show_settings_menu'] = False
+            # Settings shortcut (Ctrl+Comma on Windows/Linux, Cmd+Comma on Mac)
+            elif event.key == pygame.K_COMMA:
+                import sys
+                is_mac = sys.platform == 'darwin'
+                if (is_mac and event.mod & pygame.KMOD_META) or (not is_mac and event.mod & pygame.KMOD_CTRL):
+                    game_state['show_settings_menu'] = not game_state.get('show_settings_menu', False)
+                    if game_state['show_settings_menu']:
+                        game_state['show_achievements_menu'] = False
                     
         elif event.type == pygame.MOUSEBUTTONDOWN:
             pos = event.pos

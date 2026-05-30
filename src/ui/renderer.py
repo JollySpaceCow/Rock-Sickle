@@ -1607,7 +1607,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
             button = pygame.Rect(
                 rect.x + int(20 * scale),
                 rect.y + int(80 * scale) + i * (button_height + button_spacing),
-                int(260 * scale),
+                int(300 * scale),
                 button_height
             )
 
@@ -1629,7 +1629,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
 
             friendly_name = _get_friendly_square_name(end_square_type)
             dest_text = font.render(f"Ends on: {friendly_name}", True, (100, 0, 0))
-            screen.blit(dest_text, (button.x + int(130 * scale), button.y + int(5 * scale)))
+            screen.blit(dest_text, (button.x + int(100 * scale), button.y + int(5 * scale)))
 
             game_state['path_buttons'].append((button, choice))
 

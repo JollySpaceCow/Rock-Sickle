@@ -115,35 +115,48 @@ def handle_cpu_path(game_state, current_player, squares, next_positions, get_mov
             if 'cpu_path_delay' not in game_state:
                 game_state['cpu_path_delay'] = time.time() + 2.5
             elif time.time() > game_state['cpu_path_delay']:
-                choice_idx = random.randrange(len(game_state['path_buttons']))
-                _, choice = game_state['path_buttons'][choice_idx]
+                # Store the selected choice to prevent strobe effect
+                if 'cpu_selected_choice_idx' not in game_state:
+                    choice_idx = random.randrange(len(game_state['path_buttons']))
+                    game_state['cpu_selected_choice_idx'] = choice_idx
+                    _, choice = game_state['path_buttons'][choice_idx]
+                    game_state['cpu_selected_choice'] = choice
+                    
+                    # Show button visualization for CPU selection
+                    game_state['clicked_path_button'] = choice_idx
+                    game_state['path_button_click_time'] = time.time()
+                    game_state['cpu_path_splash_delay'] = time.time() + 0.8
                 
-                # CPU directly selects path without button visualization to avoid strobe effect
-                current_player.path_choices[current_player.position] = choice
-                remaining_spaces = game_state.get('spaces_remaining', 0)
-                
-                started_on_choice = isinstance(next_positions[current_player.position], list)
-                movement_path = get_movement_path_with_choice_func(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
-                
-                anim = {
-                    'player': current_player,
-                    'path': movement_path,
-                    'index': 0,
-                    'last_time': time.time(),
-                    'message': f"CPU Player {current_player.id + 1} chose a path. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
-                    'is_initial_move': True,
-                    'delay': 0.5
-                }
-                current_player.active_animations.append(anim)
-                audio.indigogo_sound.play()
-                
-                game_state['show_path_choice_after_roll'] = False
-                del game_state['path_buttons']
-                if 'roll_for_path_choice' in game_state:
-                    del game_state['roll_for_path_choice']
-                if 'spaces_remaining' in game_state:
-                    del game_state['spaces_remaining']
-                
-                del game_state['cpu_path_delay']
-                
-                current_player.has_rolled = True
+                elif time.time() > game_state['cpu_path_splash_delay']:
+                    choice = game_state['cpu_selected_choice']
+                    current_player.path_choices[current_player.position] = choice
+                    remaining_spaces = game_state.get('spaces_remaining', 0)
+                    
+                    started_on_choice = isinstance(next_positions[current_player.position], list)
+                    movement_path = get_movement_path_with_choice_func(current_player.position, choice, remaining_spaces, squares, next_positions, started_on_choice)
+                    
+                    anim = {
+                        'player': current_player,
+                        'path': movement_path,
+                        'index': 0,
+                        'last_time': time.time(),
+                        'message': f"CPU Player {current_player.id + 1} chose a path. Moving {remaining_spaces if started_on_choice else remaining_spaces - 1} more spaces.",
+                        'is_initial_move': True,
+                        'delay': 0.5
+                    }
+                    current_player.active_animations.append(anim)
+                    audio.indigogo_sound.play()
+                    
+                    game_state['show_path_choice_after_roll'] = False
+                    del game_state['path_buttons']
+                    if 'roll_for_path_choice' in game_state:
+                        del game_state['roll_for_path_choice']
+                    if 'spaces_remaining' in game_state:
+                        del game_state['spaces_remaining']
+                    
+                    del game_state['cpu_path_delay']
+                    del game_state['cpu_path_splash_delay']
+                    del game_state['cpu_selected_choice_idx']
+                    del game_state['cpu_selected_choice']
+                    
+                    current_player.has_rolled = True

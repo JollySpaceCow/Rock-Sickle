@@ -42,6 +42,7 @@ jump_cpu_sound = None
 whiz_cpu_sound = None
 wobble_cpu_sound = None
 doubles_sound = None
+info_sound = None
 
 def init_audio():
     """Initialize and load all audio assets."""
@@ -51,7 +52,7 @@ def init_audio():
     global win_sound, pop_sound, bing_bong_sound, disconnect_sound, indigogo_sound
     global jump_sound, mac_os_dinbg_sound, mac_os_uh_ohh_sound, wobble_sound
     global fairlin_round1_sound, restart_sound, finished_sound, woosh_sound, car_horn_sound
-    global bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound, jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound
+    global bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound, jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound, info_sound
 
     try:
         # Menus
@@ -97,6 +98,9 @@ def init_audio():
         whiz_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/WhizCPU.wav"))
         wobble_cpu_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/WobbleCPU.wav"))
         
+        # Test sound for volume adjustment
+        info_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Info.wav"))
+        
         logger.info("Audio assets loaded successfully")
     except Exception as e:
         logger.error(f"Error loading audio assets: {e}")
@@ -115,7 +119,7 @@ def apply_master_volume(volume):
         wobble_sound, fairlin_round1_sound, pong_sound, voltage_easy_sound,
         voltage_normal_sound, voltage_hard_sound, whit_sound, restart_sound, finished_sound, woosh_sound,
         car_horn_sound, bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound,
-        jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound
+        jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound, info_sound
     ]
     for sound in sounds:
         if sound is not None:
