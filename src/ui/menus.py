@@ -1,7 +1,7 @@
 import pygame
 import sys
 import os
-from src.core import audio
+from src.core import audio, quiz_tts
 from src.core.assets import AssetRegistry, load_asset
 from src.core.progress import load_game_progress, save_game_progress
 from src.ui.gallery import render_achievements_pane
@@ -35,6 +35,23 @@ def cycle_difficulty(index, difficulties):
     elif difficulties[index] == 'hard':
         difficulties[index] = 'easy'
         audio.voltage_easy_sound.play()
+
+def get_title_settings_menu_rect(screen, scale, offset_x, offset_y):
+    """Return the title-screen settings menu rectangle anchored to the game area."""
+    menu_width = int(200 * scale)
+    menu_height = int(370 * scale)
+    margin = int(10 * scale)
+    window_width, window_height = screen.get_size()
+    game_right = int(offset_x + ORIGINAL_WIDTH * scale)
+    game_height = int(ORIGINAL_HEIGHT * scale)
+
+    menu_x = game_right - menu_width - margin
+    menu_y = int(offset_y + (game_height - menu_height) / 2)
+
+    menu_x = max(margin, min(menu_x, window_width - menu_width - margin))
+    menu_y = max(margin, min(menu_y, window_height - menu_height - margin))
+
+    return pygame.Rect(menu_x, menu_y, menu_width, menu_height)
 
 def select_players(layout_state):
     """Let players configure player types and select the board.
@@ -216,10 +233,70 @@ def select_players(layout_state):
                     menu_x = settings_menu_rect.x
                     menu_y = settings_menu_rect.y
                     
+                    # Show Game Status toggle
+                    status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(55 * scale), toggle_width, int(20 * scale))
+                    if status_toggle_rect.collidepoint(pos):
+                        saved_progress['settings']['show_game_status'] = not saved_progress['settings'].get('show_game_status', False)
+                        save_game_progress(saved_progress)
+                        audio.connect_sound.play()
+                    
+                    # Status Display toggle
+                    style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(85 * scale), toggle_width, int(20 * scale))
+                    if style_toggle_rect.collidepoint(pos):
+                        saved_progress['settings']['use_modern_status_display'] = not saved_progress['settings'].get('use_modern_status_display', True)
+                        save_game_progress(saved_progress)
+                        audio.connect_sound.play()
+                    
+                    # Show Timers toggle
+                    timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(115 * scale), toggle_width, int(20 * scale))
+                    if timer_toggle_rect.collidepoint(pos):
+                        saved_progress['settings']['show_timers'] = not saved_progress['settings'].get('show_timers', False)
+                        save_game_progress(saved_progress)
+                        audio.connect_sound.play()
+                    
+                    # Speak Quiz Questions toggle
+                    questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(145 * scale), toggle_width, int(20 * scale))
+                    if questions_toggle_rect.collidepoint(pos):
+                        saved_progress['settings']['speak_quiz_questions'] = not saved_progress['settings'].get('speak_quiz_questions', True)
+                        save_game_progress(saved_progress)
+                        if saved_progress['settings']['speak_quiz_questions']:
+                            if saved_progress['settings'].get('use_device_tts', False):
+                                quiz_tts.speak_device_announcement("Speak quiz questions")
+                            else:
+                                if audio.speak_quiz_questions_sound:
+                                    audio.speak_quiz_questions_sound.play()
+                        else:
+                            audio.connect_sound.play()
+                    
+                    # Speak Quiz Answers toggle
+                    answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(175 * scale), toggle_width, int(20 * scale))
+                    if answers_toggle_rect.collidepoint(pos):
+                        saved_progress['settings']['speak_quiz_answers'] = not saved_progress['settings'].get('speak_quiz_answers', True)
+                        save_game_progress(saved_progress)
+                        if saved_progress['settings']['speak_quiz_answers']:
+                            if saved_progress['settings'].get('use_device_tts', False):
+                                quiz_tts.speak_device_announcement("Speak quiz answers")
+                            else:
+                                if audio.speak_quiz_answers_sound:
+                                    audio.speak_quiz_answers_sound.play()
+                        else:
+                            audio.connect_sound.play()
+                    
+                    # Device TTS toggle
+                    tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(205 * scale), toggle_width, int(20 * scale))
+                    if tts_source_toggle_rect.collidepoint(pos):
+                        saved_progress['settings']['use_device_tts'] = not saved_progress['settings'].get('use_device_tts', False)
+                        save_game_progress(saved_progress)
+                        if saved_progress['settings']['use_device_tts']:
+                            quiz_tts.speak_device_announcement("Device Text To Speech On")
+                        else:
+                            if audio.device_tts_off_sound:
+                                audio.device_tts_off_sound.play()
+                    
                     # Volume slider
                     slider_width = int(150 * scale)
                     slider_height = int(10 * scale)
-                    slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(80 * scale), slider_width, slider_height)
+                    slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, slider_height)
                     if slider_rect.collidepoint(pos):
                         relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
                         volume = relative_x / slider_width
@@ -228,48 +305,6 @@ def select_players(layout_state):
                         audio.apply_master_volume(volume)
                         audio.info_sound.play()
                         volume_drag_active = True
-                    
-                    # Show Game Status toggle
-                    status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(105 * scale), toggle_width, int(20 * scale))
-                    if status_toggle_rect.collidepoint(pos):
-                        saved_progress['settings']['show_game_status'] = not saved_progress['settings'].get('show_game_status', False)
-                        save_game_progress(saved_progress)
-                        audio.connect_sound.play()
-                    
-                    # Status Display toggle
-                    style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(135 * scale), toggle_width, int(20 * scale))
-                    if style_toggle_rect.collidepoint(pos):
-                        saved_progress['settings']['use_modern_status_display'] = not saved_progress['settings'].get('use_modern_status_display', True)
-                        save_game_progress(saved_progress)
-                        audio.connect_sound.play()
-                    
-                    # Show Timers toggle
-                    timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(165 * scale), toggle_width, int(20 * scale))
-                    if timer_toggle_rect.collidepoint(pos):
-                        saved_progress['settings']['show_timers'] = not saved_progress['settings'].get('show_timers', False)
-                        save_game_progress(saved_progress)
-                        audio.connect_sound.play()
-                    
-                    # Speak Quiz Questions toggle
-                    questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(195 * scale), toggle_width, int(20 * scale))
-                    if questions_toggle_rect.collidepoint(pos):
-                        saved_progress['settings']['speak_quiz_questions'] = not saved_progress['settings'].get('speak_quiz_questions', True)
-                        save_game_progress(saved_progress)
-                        audio.connect_sound.play()
-                    
-                    # Speak Quiz Answers toggle
-                    answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(225 * scale), toggle_width, int(20 * scale))
-                    if answers_toggle_rect.collidepoint(pos):
-                        saved_progress['settings']['speak_quiz_answers'] = not saved_progress['settings'].get('speak_quiz_answers', True)
-                        save_game_progress(saved_progress)
-                        audio.connect_sound.play()
-                    
-                    # Device TTS toggle
-                    tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(255 * scale), toggle_width, int(20 * scale))
-                    if tts_source_toggle_rect.collidepoint(pos):
-                        saved_progress['settings']['use_device_tts'] = not saved_progress['settings'].get('use_device_tts', False)
-                        save_game_progress(saved_progress)
-                        audio.connect_sound.play()
                     
                     # Reset button
                     reset_button_width = int(150 * scale)
@@ -299,6 +334,8 @@ def select_players(layout_state):
                     return selected_players, board_names[selected_board]
             
             elif event.type == pygame.MOUSEBUTTONUP:
+                if volume_drag_active:
+                    audio.info_sound.play()
                 volume_drag_active = False
             
             elif event.type == pygame.MOUSEMOTION:
@@ -308,7 +345,7 @@ def select_players(layout_state):
                     menu_x = settings_menu_rect.x
                     menu_y = settings_menu_rect.y
                     slider_width = int(150 * scale)
-                    slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(80 * scale), slider_width, int(10 * scale))
+                    slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, int(10 * scale))
                     relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
                     volume = relative_x / slider_width
                     saved_progress = load_game_progress()
@@ -317,7 +354,6 @@ def select_players(layout_state):
                     saved_progress['settings']['master_volume'] = volume
                     save_game_progress(saved_progress)
                     audio.apply_master_volume(volume)
-                    audio.info_sound.play()
             
             elif event.type == pygame.KEYDOWN:
                 # Fullscreen toggle is managed in input module.
@@ -397,14 +433,12 @@ def select_players(layout_state):
         
         # Settings menu overlay
         if show_settings:
-            menu_width = int(200 * scale)
-            menu_height = int(370 * scale)
-            
-            # Position in bottom right corner
-            window_width, window_height = screen.get_size()
-            menu_x = window_width - menu_width - int(10 * scale)
-            menu_y = window_height - menu_height - int(10 * scale)
-                
+            settings_menu_rect = get_title_settings_menu_rect(screen, scale, offset_x, offset_y)
+            menu_width = settings_menu_rect.width
+            menu_height = settings_menu_rect.height
+            menu_x = settings_menu_rect.x
+            menu_y = settings_menu_rect.y
+
             settings_menu_rect = pygame.Rect(menu_x, menu_y, menu_width, menu_height)
             
             pygame.draw.rect(screen, (240, 240, 240), settings_menu_rect)
@@ -416,36 +450,20 @@ def select_players(layout_state):
             
             pygame.draw.line(screen, (150, 150, 150), (menu_x + int(5 * scale), menu_y + int(40 * scale)), (menu_x + menu_width - int(5 * scale), menu_y + int(40 * scale)), 1)
             
-            status_font = pygame.font.SysFont(None, int(22 * scale))
-            
-            # Master Volume
-            volume_text = status_font.render("Master Volume:", True, (0, 0, 0))
-            screen.blit(volume_text, (menu_x + int(10 * scale), menu_y + int(55 * scale)))
-            
-            slider_width = int(150 * scale)
-            slider_height = int(10 * scale)
-            slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(80 * scale), slider_width, slider_height)
-            
-            pygame.draw.rect(screen, (150, 150, 150), slider_rect, border_radius=int(5 * scale))
-            
-            # Get current volume from progress
             saved_progress = load_game_progress()
-            volume = saved_progress.get('settings', {}).get('master_volume', 1.0)
-            handle_pos = slider_rect.left + int(volume * slider_width)
-            handle_rect = pygame.Rect(handle_pos - int(8 * scale), slider_rect.y - int(5 * scale), int(16 * scale), int(20 * scale))
-            pygame.draw.rect(screen, (80, 80, 230), handle_rect, border_radius=int(8 * scale))
+            status_font = pygame.font.SysFont(None, int(22 * scale))
             
             # Show Game Status
             status_text = status_font.render("Show Game Status:", True, (0, 0, 0))
-            screen.blit(status_text, (menu_x + int(10 * scale), menu_y + int(105 * scale)))
+            screen.blit(status_text, (menu_x + int(10 * scale), menu_y + int(55 * scale)))
             
             toggle_width = int(40 * scale)
             toggle_height = int(20 * scale)
-            status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(105 * scale), toggle_width, toggle_height)
+            status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(55 * scale), toggle_width, toggle_height)
             
             show_status = saved_progress.get('settings', {}).get('show_game_status', False)
-            toggle_color = (100, 200, 100) if show_status else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_color, status_toggle_rect, border_radius=int(10 * scale))
+            toggle_colour = (100, 200, 100) if show_status else (150, 150, 150)
+            pygame.draw.rect(screen, toggle_colour, status_toggle_rect, border_radius=int(10 * scale))
             
             handle_pos = status_toggle_rect.right - int(18 * scale) if show_status else status_toggle_rect.left + int(2 * scale)
             handle_rect = pygame.Rect(handle_pos, status_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
@@ -453,13 +471,13 @@ def select_players(layout_state):
             
             # Status Display
             style_text = status_font.render("Status Display:", True, (0, 0, 0))
-            screen.blit(style_text, (menu_x + int(10 * scale), menu_y + int(135 * scale)))
+            screen.blit(style_text, (menu_x + int(10 * scale), menu_y + int(85 * scale)))
             
-            style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(135 * scale), toggle_width, toggle_height)
+            style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(85 * scale), toggle_width, toggle_height)
             
             use_modern = saved_progress.get('settings', {}).get('use_modern_status_display', True)
-            toggle_color = (100, 200, 100) if use_modern else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_color, style_toggle_rect, border_radius=int(10 * scale))
+            toggle_colour = (100, 200, 100) if use_modern else (150, 150, 150)
+            pygame.draw.rect(screen, toggle_colour, style_toggle_rect, border_radius=int(10 * scale))
             
             handle_pos = style_toggle_rect.right - int(18 * scale) if use_modern else style_toggle_rect.left + int(2 * scale)
             handle_rect = pygame.Rect(handle_pos, style_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
@@ -467,13 +485,13 @@ def select_players(layout_state):
             
             # Show Timers
             timer_text = status_font.render("Show Timers:", True, (0, 0, 0))
-            screen.blit(timer_text, (menu_x + int(10 * scale), menu_y + int(165 * scale)))
+            screen.blit(timer_text, (menu_x + int(10 * scale), menu_y + int(115 * scale)))
             
-            timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(165 * scale), toggle_width, toggle_height)
+            timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(115 * scale), toggle_width, toggle_height)
             
             show_timers = saved_progress.get('settings', {}).get('show_timers', False)
-            toggle_color = (100, 200, 100) if show_timers else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_color, timer_toggle_rect, border_radius=int(10 * scale))
+            toggle_colour = (100, 200, 100) if show_timers else (150, 150, 150)
+            pygame.draw.rect(screen, toggle_colour, timer_toggle_rect, border_radius=int(10 * scale))
             
             handle_pos = timer_toggle_rect.right - int(18 * scale) if show_timers else timer_toggle_rect.left + int(2 * scale)
             handle_rect = pygame.Rect(handle_pos, timer_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
@@ -481,13 +499,13 @@ def select_players(layout_state):
             
             # Speak Quiz Questions
             questions_text = status_font.render("Speak Quiz Questions:", True, (0, 0, 0))
-            screen.blit(questions_text, (menu_x + int(10 * scale), menu_y + int(195 * scale)))
+            screen.blit(questions_text, (menu_x + int(10 * scale), menu_y + int(145 * scale)))
             
-            questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(195 * scale), toggle_width, toggle_height)
+            questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(145 * scale), toggle_width, toggle_height)
             
             speak_questions = saved_progress.get('settings', {}).get('speak_quiz_questions', True)
-            toggle_color = (100, 200, 100) if speak_questions else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_color, questions_toggle_rect, border_radius=int(10 * scale))
+            toggle_colour = (100, 200, 100) if speak_questions else (150, 150, 150)
+            pygame.draw.rect(screen, toggle_colour, questions_toggle_rect, border_radius=int(10 * scale))
             
             handle_pos = questions_toggle_rect.right - int(18 * scale) if speak_questions else questions_toggle_rect.left + int(2 * scale)
             handle_rect = pygame.Rect(handle_pos, questions_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
@@ -495,13 +513,13 @@ def select_players(layout_state):
             
             # Speak Quiz Answers
             answers_text = status_font.render("Speak Quiz Answers:", True, (0, 0, 0))
-            screen.blit(answers_text, (menu_x + int(10 * scale), menu_y + int(225 * scale)))
+            screen.blit(answers_text, (menu_x + int(10 * scale), menu_y + int(175 * scale)))
             
-            answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(225 * scale), toggle_width, toggle_height)
+            answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(175 * scale), toggle_width, toggle_height)
             
             speak_answers = saved_progress.get('settings', {}).get('speak_quiz_answers', True)
-            toggle_color = (100, 200, 100) if speak_answers else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_color, answers_toggle_rect, border_radius=int(10 * scale))
+            toggle_colour = (100, 200, 100) if speak_answers else (150, 150, 150)
+            pygame.draw.rect(screen, toggle_colour, answers_toggle_rect, border_radius=int(10 * scale))
             
             handle_pos = answers_toggle_rect.right - int(18 * scale) if speak_answers else answers_toggle_rect.left + int(2 * scale)
             handle_rect = pygame.Rect(handle_pos, answers_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
@@ -509,21 +527,37 @@ def select_players(layout_state):
             
             # Device TTS
             source_text = status_font.render("Device TTS:", True, (0, 0, 0))
-            screen.blit(source_text, (menu_x + int(10 * scale), menu_y + int(255 * scale)))
+            screen.blit(source_text, (menu_x + int(10 * scale), menu_y + int(205 * scale)))
             
-            tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(255 * scale), toggle_width, toggle_height)
+            tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(205 * scale), toggle_width, toggle_height)
             
             use_device_tts = saved_progress.get('settings', {}).get('use_device_tts', False)
-            toggle_color = (100, 200, 100) if use_device_tts else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_color, tts_source_toggle_rect, border_radius=int(10 * scale))
+            toggle_colour = (100, 200, 100) if use_device_tts else (150, 150, 150)
+            pygame.draw.rect(screen, toggle_colour, tts_source_toggle_rect, border_radius=int(10 * scale))
             
             handle_pos = tts_source_toggle_rect.right - int(18 * scale) if use_device_tts else tts_source_toggle_rect.left + int(2 * scale)
             handle_rect = pygame.Rect(handle_pos, tts_source_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
+            # Master Volume
+            volume_text = status_font.render("Master Volume:", True, (0, 0, 0))
+            screen.blit(volume_text, (menu_x + int(10 * scale), menu_y + int(235 * scale)))
+            
+            slider_width = int(150 * scale)
+            slider_height = int(10 * scale)
+            slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, slider_height)
+            
+            pygame.draw.rect(screen, (150, 150, 150), slider_rect, border_radius=int(5 * scale))
+            
+            # Get current volume from progress
+            volume = saved_progress.get('settings', {}).get('master_volume', 1.0)
+            handle_pos = slider_rect.left + int(volume * slider_width)
+            handle_rect = pygame.Rect(handle_pos - int(8 * scale), slider_rect.y - int(5 * scale), int(16 * scale), int(20 * scale))
+            pygame.draw.rect(screen, (80, 80, 230), handle_rect, border_radius=int(8 * scale))
+            
             # Note text
             note_font = pygame.font.SysFont(None, int(18 * scale))
-            note_text = note_font.render("Settings apply to gameplay", True, (100, 100, 100))
+            note_text = note_font.render("this will apply in game", True, (100, 100, 100))
             screen.blit(note_text, (menu_x + int(10 * scale), menu_y + int(290 * scale)))
             
             # Reset button

@@ -53,6 +53,95 @@ def spend_jail_free_card_if_held(player, game_state):
     game_state['jail_free_card_spent_player'] = player.id
     return True
 
+def set_bonus_opening_sound_delay(game_state):
+    """Track when the bonus pickup sound has finished playing."""
+    if audio.drip_drop_sound is None:
+        game_state['bonus_opening_sound_end_time'] = time.time()
+        return
+
+    audio.drip_drop_sound.play()
+    game_state['bonus_opening_sound_end_time'] = time.time() + audio.drip_drop_sound.get_length()
+
+def apply_bonus_action(game_state, player, effect, scale, squares, next_positions, JAIL_POS):
+    """Apply a revealed bonus card effect after its opening sound completes."""
+    current_time = time.time()
+    game_state['bonus_action_applied'] = True
+    game_state['bonus_action_start_time'] = current_time
+
+    if effect[0] == "move_forward":
+        num = effect[1]
+        movement_path = get_movement_path(player.position, num, game_state, squares, next_positions)
+        anim = {
+            'player': player,
+            'path': movement_path,
+            'index': 0,
+            'last_time': current_time,
+            'message': f"Player {player.id + 1} moving forward {num} spaces from bonus card.",
+            'is_initial_move': False,
+            'delay': 0.8
+        }
+        player.active_animations.append(anim)
+    elif effect[0] == "move_back":
+        num = effect[1]
+        if player.position > 0:
+            movement_path = [player.position]
+            if player.position >= num:
+                for i in range(1, num + 1):
+                    movement_path.append(player.position - i)
+            else:
+                for i in range(1, player.position + 1):
+                    movement_path.append(player.position - i)
+
+            anim = {
+                'player': player,
+                'path': movement_path,
+                'index': 0,
+                'last_time': current_time,
+                'message': f"Player {player.id + 1} moving back {num} spaces from bonus card.",
+                'is_backwards': True,
+                'delay': 0.8
+            }
+            player.active_animations.append(anim)
+        else:
+            game_state['message'] = f"Player {player.id + 1} can't move back from the start."
+    elif effect[0] == "go_to_jail":
+        game_state['game_jail_visit'] = True
+        player.prev_position = player.position
+        spent_jail_free = spend_jail_free_card_if_held(player, game_state)
+        player.jail_from_x = player.current_x
+        player.jail_from_y = player.current_y
+        player.jail_marker_anim_start = current_time
+
+        jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+        jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+        random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
+
+        audio.whiz_sound.play()
+        anim = {
+            'player': player,
+            'start_pos': (player.current_x, player.current_y),
+            'end_pos': random_jail_pos,
+            'steps': 60,
+            'current_step': 0,
+            'last_time': current_time,
+            'message': "Moving to jail.",
+            'is_jail_move': True,
+            'delay': 0.0167,
+            'jail_action': 'enter'
+        }
+        player.active_animations.append(anim)
+        if spent_jail_free:
+            game_state['message'] = f"Player {player.id + 1} spent their Get Out of Jail Free card."
+    elif effect[0] == "jail_free":
+        player.has_jail_free_card = True
+        player.jail_free_card_visible = False
+        game_state['bonus_target_player_id'] = player.id
+        if audio.doubles_sound is not None:
+            audio.doubles_sound.play()
+        game_state['message'] = f"Player {player.id + 1} got a Get Out of Jail Free card!"
+    elif effect[0] == "pick_quiz":
+        game_state['pending_quiz'] = True
+
 def resize_assets(scale, board_type='Classic'):
     """Resize all game assets based on screen scale while maintaining aspect ratios where necessary.
     
@@ -243,7 +332,7 @@ def apply_effect(player, square_type, game_state, scale, squares, squares_coords
                     player.has_rolled = True
                     return message, chain
 
-                audio.drip_drop_sound.play()
+                set_bonus_opening_sound_delay(game_state)
                 effect = cards.parse_bonus_card(bonus)
                 image_key = cards.get_bonus_image_key(effect, "Expert")
                 if image_key:
@@ -278,7 +367,7 @@ def apply_effect(player, square_type, game_state, scale, squares, squares_coords
             if can_pick_bonus:
                 bonus = cards.bonus_cards[cards.bonus_card_index]
                 cards.bonus_card_index = (cards.bonus_card_index + 1) % len(cards.bonus_cards)
-                audio.drip_drop_sound.play()
+                set_bonus_opening_sound_delay(game_state)
                 effect = cards.parse_bonus_card(bonus)
                 image_key = cards.get_bonus_image_key(effect, "Classic")
                 if image_key:
@@ -831,88 +920,21 @@ def run_game_loop(layout_state, players, selected_board, saved_progress):
                 elapsed = current_time - game_state['bonus_flip_start']
                 if elapsed >= 0.5:
                     game_state['bonus_image_state'] = 'showing'
-                    player = players[game_state['current_player']]
-                    effect = game_state['bonus_action']
-                    
-                    game_state['bonus_action_start_time'] = current_time
-                    
-                    if effect[0] == "move_forward":
-                        num = effect[1]
-                        movement_path = get_movement_path(player.position, num, game_state, squares, next_positions)
-                        anim = {
-                            'player': player,
-                            'path': movement_path,
-                            'index': 0,
-                            'last_time': time.time(),
-                            'message': f"Player {player.id + 1} moving forward {num} spaces from bonus card.",
-                            'is_initial_move': False,
-                            'delay': 0.8
-                        }
-                        player.active_animations.append(anim)
-                    elif effect[0] == "move_back":
-                        num = effect[1]
-                        if player.position > 0:
-                            target_pos = max(0, player.position - num)
-                            movement_path = [player.position]
-                            if player.position >= num:
-                                for i in range(1, num + 1):
-                                    movement_path.append(player.position - i)
-                            else:
-                                for i in range(1, player.position + 1):
-                                    movement_path.append(player.position - i)
-                                    
-                            anim = {
-                                'player': player,
-                                'path': movement_path,
-                                'index': 0,
-                                'last_time': time.time(),
-                                'message': f"Player {player.id + 1} moving back {num} spaces from bonus card.",
-                                'is_backwards': True,
-                                'delay': 0.8
-                            }
-                            player.active_animations.append(anim)
-                        else:
-                            game_state['message'] = f"Player {player.id + 1} can't move back from the start."
-                    elif effect[0] == "go_to_jail":
-                        game_state['game_jail_visit'] = True
-                        player.prev_position = player.position
-                        spent_jail_free = spend_jail_free_card_if_held(player, game_state)
-                        player.jail_from_x = player.current_x
-                        player.jail_from_y = player.current_y
-                        player.jail_marker_anim_start = time.time()
-                        
-                        jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
-                        jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
-                        random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
-                        
-                        audio.whiz_sound.play()
-                        anim = {
-                            'player': player,
-                            'start_pos': (player.current_x, player.current_y),
-                            'end_pos': random_jail_pos,
-                            'steps': 60,
-                            'current_step': 0,
-                            'last_time': time.time(),
-                            'message': "Moving to jail.",
-                            'is_jail_move': True,
-                            'delay': 0.0167,
-                            'jail_action': 'enter'
-                        }
-                        player.active_animations.append(anim)
-                        if spent_jail_free:
-                            game_state['message'] = f"Player {player.id + 1} spent their Get Out of Jail Free card."
-                    elif effect[0] == "jail_free":
-                        player.has_jail_free_card = True
-                        player.jail_free_card_visible = False
-                        game_state['bonus_target_player_id'] = player.id
-                        if audio.doubles_sound is not None:
-                            audio.doubles_sound.play()
-                        game_state['message'] = f"Player {player.id + 1} got a Get Out of Jail Free card!"
-                    elif effect[0] == "pick_quiz":
-                        game_state['pending_quiz'] = True
+                    game_state.pop('bonus_action_applied', None)
             elif game_state['bonus_image_state'] == 'showing':
                 player = players[game_state['current_player']]
-                if (game_state['bonus_action'][0] == "jail_free" and
+                if not game_state.get('bonus_action_applied', False):
+                    if current_time >= game_state.get('bonus_opening_sound_end_time', current_time):
+                        apply_bonus_action(
+                            game_state,
+                            player,
+                            game_state['bonus_action'],
+                            scale,
+                            squares,
+                            next_positions,
+                            JAIL_POS
+                        )
+                elif (game_state['bonus_action'][0] == "jail_free" and
                     'bonus_action_start_time' in game_state and
                     current_time - game_state['bonus_action_start_time'] >= 1.2):
                     game_state['bonus_image_state'] = 'gliding_to_player'
@@ -946,7 +968,9 @@ def run_game_loop(layout_state, players, selected_board, saved_progress):
                     target_player.jail_free_card_visible = True
                     for key in [
                         'bonus_image_key', 'bonus_image_state', 'bonus_action',
-                        'bonus_target_player_id', 'bonus_glide_start'
+                        'bonus_target_player_id', 'bonus_glide_start',
+                        'bonus_action_applied', 'bonus_action_start_time',
+                        'bonus_opening_sound_end_time'
                     ]:
                         game_state.pop(key, None)
                     target_player.turn_ended = True
@@ -959,9 +983,12 @@ def run_game_loop(layout_state, players, selected_board, saved_progress):
             elif game_state['bonus_image_state'] == 'shrinking':
                 elapsed = current_time - game_state['bonus_shrink_start']
                 if elapsed >= 1.0:
-                    del game_state['bonus_image_key']
-                    del game_state['bonus_image_state']
-                    del game_state['bonus_action']
+                    for key in [
+                        'bonus_image_key', 'bonus_image_state', 'bonus_action',
+                        'bonus_action_applied', 'bonus_action_start_time',
+                        'bonus_opening_sound_end_time'
+                    ]:
+                        game_state.pop(key, None)
                     
                     if game_state.get('pending_quiz', False):
                         quiz_tts.stop_quiz_tts()

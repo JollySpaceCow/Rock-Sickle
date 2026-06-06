@@ -1,5 +1,6 @@
 import pygame
 import sys
+import os
 import logging
 import time
 from src.core import audio, quiz_tts
@@ -65,6 +66,11 @@ def main():
     font = pygame.font.SysFont(None, 24)
     title_font = pygame.font.SysFont(None, 72)
     
+    if os.environ.get("SMOKE_TEST") == "1":
+        logger.info("Smoke test: all systems initialised successfully. Exiting.")
+        pygame.quit()
+        sys.exit(0)
+        
     audio.connect_sound.play()
     
     # Define the initial master volume setup

@@ -5,6 +5,24 @@ from src.ui.button_anim import get_ui_button_rects
 from src.core.progress import load_game_progress, save_game_progress
 from src.constants import ORIGINAL_WIDTH, ORIGINAL_HEIGHT, DIE_POS, JAIL_SIZE
 
+def get_settings_menu_rect(settings_button_rect, scale, screen):
+    """Return the settings menu rectangle using the same clamping as the renderer."""
+    menu_width = int(200 * scale)
+    menu_height = int(370 * scale)
+    menu_x = settings_button_rect.x + (settings_button_rect.width // 2) - (menu_width // 2)
+    menu_y = settings_button_rect.y - menu_height - int(10 * scale)
+
+    window_width, _ = screen.get_size()
+
+    if menu_x + menu_width > window_width:
+        menu_x = window_width - menu_width - int(5 * scale)
+    if menu_x < 0:
+        menu_x = int(5 * scale)
+    if menu_y < 0:
+        menu_y = int(5 * scale)
+
+    return pygame.Rect(menu_x, menu_y, menu_width, menu_height)
+
 def handle_events(events, game_state, players, layout_state, squares, next_positions, move_player_func, apply_quiz_effect_func, get_movement_path_with_choice_func, resize_assets_func):
     """Handle all Pygame events during gameplay, updating the game and layout states.
     
@@ -196,6 +214,71 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
             restart_button_rect, achievement_button_rect, settings_button_rect, magnify_button_rect = get_ui_button_rects(
                 game_state, scale, offset_x, offset_y, screen.get_height()
             )
+            if game_state.get('show_settings_menu', False):
+                menu_rect = get_settings_menu_rect(settings_button_rect, scale, screen)
+
+                if menu_rect.collidepoint(pos):
+                    if 'status_toggle_rect' in game_state and game_state['status_toggle_rect'].collidepoint(pos):
+                        game_state['show_game_status'] = not game_state.get('show_game_status', True)
+                    if 'style_toggle_rect' in game_state and game_state['style_toggle_rect'].collidepoint(pos):
+                        game_state['use_modern_status_display'] = not game_state.get('use_modern_status_display', False)
+                    if 'timer_toggle_rect' in game_state and game_state['timer_toggle_rect'].collidepoint(pos):
+                        game_state['show_timers'] = not game_state.get('show_timers', False)
+                        audio.connect_sound.play()
+                    if 'questions_toggle_rect' in game_state and game_state['questions_toggle_rect'].collidepoint(pos):
+                        game_state['speak_quiz_questions'] = not game_state.get('speak_quiz_questions', True)
+                        if not game_state['speak_quiz_questions']:
+                            quiz_tts.stop_question_tts()
+                        if game_state['speak_quiz_questions']:
+                            if game_state.get('use_device_tts', False):
+                                quiz_tts.speak_device_announcement("Speak quiz questions")
+                            else:
+                                if audio.speak_quiz_questions_sound:
+                                    audio.speak_quiz_questions_sound.play()
+                        else:
+                            audio.connect_sound.play()
+                    if 'answers_toggle_rect' in game_state and game_state['answers_toggle_rect'].collidepoint(pos):
+                        game_state['speak_quiz_answers'] = not game_state.get('speak_quiz_answers', True)
+                        if not game_state['speak_quiz_answers']:
+                            quiz_tts.stop_answer_tts()
+                        if game_state['speak_quiz_answers']:
+                            if game_state.get('use_device_tts', False):
+                                quiz_tts.speak_device_announcement("Speak quiz answers")
+                            else:
+                                if audio.speak_quiz_answers_sound:
+                                    audio.speak_quiz_answers_sound.play()
+                        else:
+                            audio.connect_sound.play()
+                    if 'tts_source_toggle_rect' in game_state and game_state['tts_source_toggle_rect'].collidepoint(pos):
+                        game_state['use_device_tts'] = not game_state.get('use_device_tts', False)
+                        quiz_tts.set_answer_source(game_state['use_device_tts'])
+                        quiz_tts.stop_answer_tts()
+                        if game_state['use_device_tts']:
+                            quiz_tts.speak_device_announcement("Device Text To Speech On")
+                        else:
+                            if audio.device_tts_off_sound:
+                                audio.device_tts_off_sound.play()
+                    if 'volume_slider_rect' in game_state and game_state['volume_slider_rect'].collidepoint(pos):
+                        game_state['volume_drag_active'] = True
+                        slider_rect = game_state['volume_slider_rect']
+                        slider_width = game_state['volume_slider_width']
+                        relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
+                        volume = relative_x / slider_width
+                        game_state['master_volume'] = volume
+                        audio.apply_master_volume(volume)
+                    if 'reset_button_rect' in game_state and game_state['reset_button_rect'].collidepoint(pos):
+                        game_state['master_volume'] = 1.0
+                        game_state['show_game_status'] = False
+                        game_state['use_modern_status_display'] = True
+                        game_state['show_timers'] = False
+                        game_state['speak_quiz_questions'] = True
+                        game_state['speak_quiz_answers'] = True
+                        game_state['use_device_tts'] = False
+                        quiz_tts.set_answer_source(False)
+                        audio.apply_master_volume(game_state['master_volume'])
+                        audio.restart_sound.play()
+                    continue
+
             if restart_button_rect.collidepoint(pos):
                 game_state['restart_hold_start'] = time.time()
                 
@@ -215,53 +298,7 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                 game_state['show_achievements_menu'] = False
                 
             if game_state.get('show_settings_menu', False):
-                menu_width = int(200 * scale)
-                menu_height = int(370 * scale)
-                menu_x = settings_button_rect.x + (settings_button_rect.width // 2) - (menu_width // 2)
-                menu_y = settings_button_rect.y - menu_height - int(10 * scale)
-                menu_rect = pygame.Rect(menu_x, menu_y, menu_width, menu_height)
-                
-                if 'status_toggle_rect' in game_state and game_state['status_toggle_rect'].collidepoint(pos):
-                    game_state['show_game_status'] = not game_state.get('show_game_status', True)
-                if 'style_toggle_rect' in game_state and game_state['style_toggle_rect'].collidepoint(pos):
-                    game_state['use_modern_status_display'] = not game_state.get('use_modern_status_display', False)
-                if 'timer_toggle_rect' in game_state and game_state['timer_toggle_rect'].collidepoint(pos):
-                    game_state['show_timers'] = not game_state.get('show_timers', False)
-                    audio.connect_sound.play()
-                if 'questions_toggle_rect' in game_state and game_state['questions_toggle_rect'].collidepoint(pos):
-                    game_state['speak_quiz_questions'] = not game_state.get('speak_quiz_questions', True)
-                    if not game_state['speak_quiz_questions']:
-                        quiz_tts.stop_question_tts()
-                    audio.connect_sound.play()
-                if 'answers_toggle_rect' in game_state and game_state['answers_toggle_rect'].collidepoint(pos):
-                    game_state['speak_quiz_answers'] = not game_state.get('speak_quiz_answers', True)
-                    if not game_state['speak_quiz_answers']:
-                        quiz_tts.stop_answer_tts()
-                    audio.connect_sound.play()
-                if 'tts_source_toggle_rect' in game_state and game_state['tts_source_toggle_rect'].collidepoint(pos):
-                    game_state['use_device_tts'] = not game_state.get('use_device_tts', False)
-                    quiz_tts.set_answer_source(game_state['use_device_tts'])
-                    quiz_tts.stop_answer_tts()
-                    audio.connect_sound.play()
-                if 'volume_slider_rect' in game_state and game_state['volume_slider_rect'].collidepoint(pos):
-                    game_state['volume_drag_active'] = True
-                    slider_rect = game_state['volume_slider_rect']
-                    slider_width = game_state['volume_slider_width']
-                    relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
-                    volume = relative_x / slider_width
-                    game_state['master_volume'] = volume
-                    audio.apply_master_volume(volume)
-                if 'reset_button_rect' in game_state and game_state['reset_button_rect'].collidepoint(pos):
-                    game_state['master_volume'] = 1.0
-                    game_state['show_game_status'] = False
-                    game_state['use_modern_status_display'] = True
-                    game_state['show_timers'] = False
-                    game_state['speak_quiz_questions'] = True
-                    game_state['speak_quiz_answers'] = True
-                    game_state['use_device_tts'] = False
-                    quiz_tts.set_answer_source(False)
-                    audio.apply_master_volume(game_state['master_volume'])
-                    audio.restart_sound.play()
+                menu_rect = get_settings_menu_rect(settings_button_rect, scale, screen)
                 if not menu_rect.collidepoint(pos) and not settings_button_rect.collidepoint(pos):
                     game_state['show_settings_menu'] = False
                     game_state['volume_drag_active'] = False
@@ -330,6 +367,8 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                 audio.restart_sound.play()
             game_state['restart_hold_start'] = None
             game_state['restart_ready'] = False
+            if game_state.get('volume_drag_active', False):
+                audio.info_sound.play()
             game_state['volume_drag_active'] = False
             
         elif event.type == pygame.MOUSEMOTION:

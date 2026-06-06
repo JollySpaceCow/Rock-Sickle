@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from src.core.paths import get_legacy_progress_file_path, get_progress_file_path
+from src.core.paths import get_progress_file_path
 
 logger = logging.getLogger()
 
@@ -36,11 +36,7 @@ def load_game_progress():
     
     try:
         progress_path = get_progress_file_path()
-        legacy_progress_path = get_legacy_progress_file_path()
         load_path = progress_path
-
-        if not os.path.exists(progress_path) and os.path.exists(legacy_progress_path):
-            load_path = legacy_progress_path
 
         if os.path.exists(load_path):
             with open(load_path, 'r') as f:

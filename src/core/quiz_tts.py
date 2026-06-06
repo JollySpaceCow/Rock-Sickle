@@ -206,6 +206,11 @@ def _speak_device(text):
     threading.Thread(target=run, daemon=True).start()
 
 
+def speak_device_announcement(text):
+    """Speak settings announcements via the device TTS voice."""
+    _speak_device(text)
+
+
 def _say_busy():
     with _say_lock:
         return _say_proc is not None and _say_proc.poll() is None
@@ -241,6 +246,18 @@ def stop_quiz_tts():
     """Stop any quiz question or answer narration currently playing."""
     stop_question_tts()
     stop_answer_tts()
+
+
+def is_quiz_tts_busy():
+    """Return True while quiz question or answer narration is active or queued."""
+    global _playing
+    music_busy = pygame.mixer.music.get_busy()
+    if _playing and not music_busy:
+        _playing = False
+    question_busy = _playing or music_busy
+    answer_busy = bool(_answer_queue)
+    answer_busy = answer_busy or bool(_answer_channel and _answer_channel.get_busy())
+    return question_busy or answer_busy or _say_busy()
 
 
 def queue_answers(options, is_expert=False):

@@ -29,6 +29,14 @@ jobs:
       - name: Build Mac app
         run: pyinstaller buildmac.spec
 
+      - name: Run smoke test
+        env:
+          SMOKE_TEST: "1"
+          SDL_VIDEODRIVER: "dummy"
+          SDL_AUDIODRIVER: "dummy"
+        run: |
+          "./dist/Rock Sickle.app/Contents/MacOS/Rock Sickle Mac"
+
       - name: Upload DMG to release
         uses: softprops/action-gh-release@v2
         with:
@@ -50,6 +58,14 @@ jobs:
 
       - name: Build Windows exe
         run: pyinstaller buildwin.spec
+
+      - name: Run smoke test
+        env:
+          SMOKE_TEST: "1"
+          SDL_VIDEODRIVER: "dummy"
+          SDL_AUDIODRIVER: "dummy"
+        run: |
+          "./dist/Rock Sickle Windows.exe"
 
       - name: Upload EXE to release
         uses: softprops/action-gh-release@v2
@@ -108,6 +124,15 @@ jobs:
       - name: Build AppImage
         run: |
           APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir "dist/Rock Sickle Linux.AppImage"
+
+      - name: Run smoke test
+        env:
+          SMOKE_TEST: "1"
+          SDL_VIDEODRIVER: "dummy"
+          SDL_AUDIODRIVER: "dummy"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          "./dist/Rock Sickle Linux.AppImage"
 
       - name: Upload AppImage to release
         uses: softprops/action-gh-release@v2

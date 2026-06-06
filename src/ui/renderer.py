@@ -65,36 +65,39 @@ def _draw_secret_pathway_rails(screen, squares_coords, scale, game_state, camera
 
     screen_w = screen.get_width()
     screen_h = screen.get_height()
-    half_tile = max(3, int(6.5 * scale * camera_zoom))
-    path_gap = max(1, int(1.5 * scale * camera_zoom))
-    rail_offset = half_tile + path_gap
+    rail_offset = max(4, int(8 * scale * camera_zoom))
     line_width = max(1, int(2 * scale * camera_zoom))
 
-    for i in range(len(squares_coords) - 1):
-        x1, y1 = camera.transform_coords(
-            squares_coords[i][0], squares_coords[i][1],
-            scale, game_state, screen_w, screen_h,
-        )
-        x2, y2 = camera.transform_coords(
-            squares_coords[i + 1][0], squares_coords[i + 1][1],
-            scale, game_state, screen_w, screen_h,
-        )
+    # Transform board coordinates to screen points
+    path_points = [
+        camera.transform_coords(x, y, scale, game_state, screen_w, screen_h)
+        for x, y in squares_coords
+    ]
 
+    # Draw left and right rails and central line for each segment
+    for i in range(len(path_points) - 1):
+        x1, y1 = path_points[i]
+        x2, y2 = path_points[i + 1]
         dx = x2 - x1
         dy = y2 - y1
-        length = max(1, math.sqrt(dx * dx + dy * dy))
-        dx /= length
-        dy /= length
-        perp_dx = -dy
-        perp_dy = dx
-
-        left_start = (int(x1 + perp_dx * rail_offset), int(y1 + perp_dy * rail_offset))
-        left_end = (int(x2 + perp_dx * rail_offset), int(y2 + perp_dy * rail_offset))
-        right_start = (int(x1 - perp_dx * rail_offset), int(y1 - perp_dy * rail_offset))
-        right_end = (int(x2 - perp_dx * rail_offset), int(y2 - perp_dy * rail_offset))
-
+        length = max(1, math.hypot(dx, dy))
+        nx = -dy / length
+        ny = dx / length
+        # side rails
+        left_start = (int(x1 + nx * rail_offset), int(y1 + ny * rail_offset))
+        left_end = (int(x2 + nx * rail_offset), int(y2 + ny * rail_offset))
+        right_start = (int(x1 - nx * rail_offset), int(y1 - ny * rail_offset))
+        right_end = (int(x2 - nx * rail_offset), int(y2 - ny * rail_offset))
+        # side rails
         pygame.draw.line(screen, BLACK, left_start, left_end, line_width)
         pygame.draw.line(screen, BLACK, right_start, right_end, line_width)
+        # central line (shortened)
+        margin = int(0.2 * length)
+        cx1 = int(x1 + dx * margin)
+        cy1 = int(y1 + dy * margin)
+        cx2 = int(x2 - dx * margin)
+        cy2 = int(y2 - dy * margin)
+        pygame.draw.line(screen, BLACK, (cx1, cy1), (cx2, cy2), max(1, line_width // 2))
 
 
 def get_expert_tile_image(tile_index, square_type, current_tile_images, squares_coords, next_positions):
@@ -490,10 +493,11 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
                 perp_dx = -dy
                 perp_dy = dx
                 
-                # Base edge width stays wide; tip length is slightly shorter for a sharper pointer
+                # Keep the base edge compact so the triangles sit neatly between the rails.
                 # Complies with Australian English spelling conventions
-                arrow_length = max(3, int(5.2 * scale * camera_zoom))
-                arrow_width = max(3, int(6.5 * scale * camera_zoom))
+                # Reduce the long edge (length) and width of the white triangle for a subtler look
+                arrow_length = max(3, int(4.0 * scale * camera_zoom))
+                arrow_width = max(2, int(4.0 * scale * camera_zoom))
                 
                 # Tip points forward in the direction of movement, centered on the midpoint
                 tip_x = int(mid_x + dx * arrow_length * 0.5)
@@ -1115,7 +1119,7 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
         reset_button_width = int(150 * scale)
         reset_button_height = int(30 * scale)
         reset_button_x = menu_x + (menu_width - reset_button_width) // 2
-        reset_button_y = menu_y + int(300 * scale)
+        reset_button_y = menu_y + int(320 * scale)
         reset_button_rect = pygame.Rect(reset_button_x, reset_button_y, reset_button_width, reset_button_height)
         
         pygame.draw.rect(screen, (220, 220, 220), reset_button_rect, border_radius=int(5 * scale))

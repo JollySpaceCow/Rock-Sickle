@@ -36,23 +36,14 @@ def get_user_log_dir():
     return os.path.join(base_dir, APP_ID)
 
 
-def ensure_dir(path):
-    os.makedirs(path, exist_ok=True)
-    return path
-
-
 def get_progress_file_path():
-    return os.path.join(ensure_dir(get_user_data_dir()), "rock_sickle_progress.json")
+    os.makedirs(get_user_data_dir(), exist_ok=True)
+    return os.path.join(get_user_data_dir(), "rock_sickle_progress.json")
 
 
 def get_log_file_path():
     try:
-        return os.path.join(ensure_dir(get_user_log_dir()), "rock_sickle.log")
+        os.makedirs(get_user_log_dir(), exist_ok=True)
+        return os.path.join(get_user_log_dir(), "rock_sickle.log")
     except OSError:
         return os.path.join(tempfile.gettempdir(), "rock_sickle.log")
-
-
-def get_legacy_progress_file_path():
-    """Return the old app-adjacent progress location used by previous builds."""
-    project_root = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    return os.path.join(project_root, "rock_sickle_progress.json")

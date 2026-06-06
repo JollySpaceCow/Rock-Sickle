@@ -1,6 +1,89 @@
 import time
 import random
+import re
 from src.core import audio, quiz_tts
+
+CPU_QUIZ_TIMING = {
+    'easy': {
+        'after_done_seconds': (0.5, 1.2),
+    },
+    'normal': {
+        'read_fraction': (0.72, 1.08),
+        'extra_seconds': (0.2, 0.9),
+    },
+    'hard': {
+        'question_fraction': (0.75, 0.95),
+        'extra_seconds': (0.0, 0.35),
+    },
+}
+
+
+def _estimate_spoken_seconds(text):
+    """Estimate narration time for CPU answer timing when exact audio length is unknown."""
+    word_count = len(re.findall(r"\w+", text))
+    return max(1.2, word_count / 2.45)
+
+
+def _estimate_quiz_read_seconds(question, options):
+    answer_text = " ".join(f"{index + 1}. {option}" for index, option in enumerate(options))
+    return _estimate_spoken_seconds(question), _estimate_spoken_seconds(answer_text)
+
+
+def _set_cpu_quiz_timing(game_state, difficulty):
+    question, options, _ = game_state['quiz_question']
+    question_seconds, answer_seconds = _estimate_quiz_read_seconds(question, options)
+    now = time.time()
+
+    game_state['cpu_quiz_wait_started'] = now
+    game_state['cpu_quiz_wait_for_tts_done'] = False
+
+    if difficulty == 'easy':
+        timing = CPU_QUIZ_TIMING['easy']
+        game_state['cpu_quiz_delay'] = now
+        game_state['cpu_quiz_after_tts_delay'] = random.uniform(*timing['after_done_seconds'])
+    elif difficulty == 'hard':
+        timing = CPU_QUIZ_TIMING['hard']
+        delay = question_seconds * random.uniform(*timing['question_fraction'])
+        delay += random.uniform(*timing['extra_seconds'])
+        game_state['cpu_quiz_delay'] = now + delay
+    else:
+        timing = CPU_QUIZ_TIMING['normal']
+        total_seconds = question_seconds + answer_seconds
+        fraction = random.uniform(*timing['read_fraction'])
+        delay = total_seconds * fraction + random.uniform(*timing['extra_seconds'])
+        game_state['cpu_quiz_delay'] = now + delay
+        game_state['cpu_quiz_wait_for_tts_done'] = fraction >= 1.0
+
+
+def _cpu_quiz_ready_to_answer(game_state, difficulty):
+    now = time.time()
+
+    if difficulty == 'easy':
+        if quiz_tts.is_quiz_tts_busy():
+            return False
+        if 'cpu_quiz_tts_done_time' not in game_state:
+            game_state['cpu_quiz_tts_done_time'] = now
+        return now - game_state['cpu_quiz_tts_done_time'] >= game_state.get('cpu_quiz_after_tts_delay', 0.5)
+
+    if now < game_state['cpu_quiz_delay']:
+        return False
+
+    if game_state.get('cpu_quiz_wait_for_tts_done', False) and quiz_tts.is_quiz_tts_busy():
+        return False
+
+    return True
+
+
+def _clear_cpu_quiz_timing(game_state):
+    for key in [
+        'cpu_quiz_delay',
+        'cpu_quiz_wait_started',
+        'cpu_quiz_after_tts_delay',
+        'cpu_quiz_tts_done_time',
+        'cpu_quiz_wait_for_tts_done',
+    ]:
+        game_state.pop(key, None)
+
 
 def handle_cpu_turn(game_state, players, squares_coords, JAIL_POS, move_player_func):
     """Handle the automated movement and actions of a CPU player on their turn.
@@ -28,8 +111,8 @@ def handle_cpu_quiz(game_state, current_player, scale, apply_quiz_effect_func):
     if game_state.get('show_quiz', False) and 'quiz_buttons' in game_state:
         if current_player.is_computer:
             if 'cpu_quiz_delay' not in game_state:
-                game_state['cpu_quiz_delay'] = time.time() + 3.0
-            elif time.time() > game_state['cpu_quiz_delay']:
+                _set_cpu_quiz_timing(game_state, current_player.difficulty)
+            elif _cpu_quiz_ready_to_answer(game_state, current_player.difficulty):
                 _, _, correct = game_state['quiz_question']
                 is_correct = False
                 
@@ -52,7 +135,7 @@ def handle_cpu_quiz(game_state, current_player, scale, apply_quiz_effect_func):
                 game_state['cpu_splash_option'] = selected_option
                 game_state['cpu_splash_is_correct'] = is_correct
                 
-                del game_state['cpu_quiz_delay']
+                _clear_cpu_quiz_timing(game_state)
             
             if 'cpu_splash_delay' in game_state and time.time() > game_state['cpu_splash_delay']:
                 is_correct = game_state['cpu_splash_is_correct']
@@ -84,6 +167,9 @@ def handle_cpu_bonus(game_state, current_player):
     """
     if 'bonus_image_state' in game_state and game_state['bonus_image_state'] == 'showing':
         if current_player.is_computer:
+            if not game_state.get('bonus_action_applied', False):
+                return
+
             if 'bonus_action_start_time' in game_state and time.time() - game_state['bonus_action_start_time'] >= 2.0:
                 if game_state['bonus_action'][0] != "pick_quiz" or not game_state.get('show_quiz', False):
                     game_state['bonus_image_state'] = 'flipping_back'
