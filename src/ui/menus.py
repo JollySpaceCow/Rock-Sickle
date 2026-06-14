@@ -1,6 +1,7 @@
 import pygame
 import sys
 import os
+from src.core.paths import get_user_data_dir
 from src.core import audio, quiz_tts
 from src.core.assets import AssetRegistry, load_asset
 from src.core.progress import load_game_progress, save_game_progress
@@ -10,6 +11,72 @@ from src.constants import (
     GRAY, GREEN, BLACK, DARK_GREY, WHITE,
     player_colours
 )
+
+_CYCLE_SQUARE_TYPES = ['B', 'Q', 'J', '1', '0', '-2']
+
+def _cycle_godmode_tile():
+    """Cycle the godmode tile setting to the next type in the cycle and save it."""
+    from src.core.progress import load_game_progress, save_game_progress
+    saved_progress = load_game_progress()
+    if 'settings' not in saved_progress:
+        saved_progress['settings'] = {}
+    current_tile = saved_progress['settings'].get('godmode_tile', 'B')
+    try:
+        idx = _CYCLE_SQUARE_TYPES.index(current_tile)
+        next_tile = _CYCLE_SQUARE_TYPES[(idx + 1) % len(_CYCLE_SQUARE_TYPES)]
+    except ValueError:
+        next_tile = 'B'
+    saved_progress['settings']['godmode_tile'] = next_tile
+    save_game_progress(saved_progress)
+
+def get_settings_rects(menu_rect, scale, godmode_enabled):
+    """Calculate the layout rectangles for all settings dynamically.
+    
+    Complies with Australian English spelling conventions.
+    """
+    menu_x = menu_rect.x
+    menu_y = menu_rect.y
+    menu_width = menu_rect.width
+    
+    toggle_width = int(40 * scale)
+    toggle_height = int(20 * scale)
+    y_cursor = menu_y + int(55 * scale)
+    y_spacing = int(30 * scale)
+    
+    rects = {}
+    rects['status'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+    y_cursor += y_spacing
+    
+    rects['style'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+    y_cursor += y_spacing
+    
+    rects['timer'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+    y_cursor += y_spacing
+    
+    rects['questions'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+    y_cursor += y_spacing
+    
+    rects['answers'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+    y_cursor += y_spacing
+    
+    rects['tts_source'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+    y_cursor += y_spacing
+    
+    if godmode_enabled:
+        # Godmode cycle button: width 30, height 20
+        rects['godmode_cycle'] = pygame.Rect(menu_x + menu_width - int(90 * scale), y_cursor, int(30 * scale), int(20 * scale))
+        # Godmode mute toggle: width 40, height 20
+        rects['godmode_mute'] = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), y_cursor, toggle_width, toggle_height)
+        y_cursor += y_spacing
+        
+    rects['volume_slider'] = pygame.Rect(menu_x + int(25 * scale), y_cursor + int(25 * scale), int(150 * scale), int(10 * scale))
+    y_cursor += int(65 * scale)
+    
+    rects['reset'] = pygame.Rect(menu_x + (menu_width - int(150 * scale)) // 2, y_cursor, int(150 * scale), int(30 * scale))
+    
+    return rects
+
+
 
 def toggle_player_state(index, player_states, difficulties):
     """Toggle a player's state between not set, human, or CPU."""
@@ -37,9 +104,14 @@ def cycle_difficulty(index, difficulties):
         audio.voltage_easy_sound.play()
 
 def get_title_settings_menu_rect(screen, scale, offset_x, offset_y):
-    """Return the title-screen settings menu rectangle anchored to the game area."""
+    """Return the title-screen settings menu rectangle anchored to the game area.
+    
+    Complies with Australian English spelling conventions.
+    """
+    saved_progress = load_game_progress()
+    godmode_enabled = saved_progress.get('settings', {}).get('godmode', False)
     menu_width = int(200 * scale)
-    menu_height = int(370 * scale)
+    menu_height = int((400 if godmode_enabled else 370) * scale)
     margin = int(10 * scale)
     window_width, window_height = screen.get_size()
     game_right = int(offset_x + ORIGINAL_WIDTH * scale)
@@ -227,36 +299,25 @@ def select_players(layout_state):
                     if 'settings' not in saved_progress:
                         saved_progress['settings'] = {}
                     
-                    # Check toggle clicks
-                    toggle_width = int(40 * scale)
-                    menu_width = int(200 * scale)
-                    menu_x = settings_menu_rect.x
-                    menu_y = settings_menu_rect.y
+                    godmode_enabled = saved_progress['settings'].get('godmode', False)
+                    rects = get_settings_rects(settings_menu_rect, scale, godmode_enabled)
                     
-                    # Show Game Status toggle
-                    status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(55 * scale), toggle_width, int(20 * scale))
-                    if status_toggle_rect.collidepoint(pos):
+                    if rects['status'].collidepoint(pos):
                         saved_progress['settings']['show_game_status'] = not saved_progress['settings'].get('show_game_status', False)
                         save_game_progress(saved_progress)
                         audio.connect_sound.play()
                     
-                    # Status Display toggle
-                    style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(85 * scale), toggle_width, int(20 * scale))
-                    if style_toggle_rect.collidepoint(pos):
+                    elif rects['style'].collidepoint(pos):
                         saved_progress['settings']['use_modern_status_display'] = not saved_progress['settings'].get('use_modern_status_display', True)
                         save_game_progress(saved_progress)
                         audio.connect_sound.play()
                     
-                    # Show Timers toggle
-                    timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(115 * scale), toggle_width, int(20 * scale))
-                    if timer_toggle_rect.collidepoint(pos):
+                    elif rects['timer'].collidepoint(pos):
                         saved_progress['settings']['show_timers'] = not saved_progress['settings'].get('show_timers', False)
                         save_game_progress(saved_progress)
                         audio.connect_sound.play()
                     
-                    # Speak Quiz Questions toggle
-                    questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(145 * scale), toggle_width, int(20 * scale))
-                    if questions_toggle_rect.collidepoint(pos):
+                    elif rects['questions'].collidepoint(pos):
                         saved_progress['settings']['speak_quiz_questions'] = not saved_progress['settings'].get('speak_quiz_questions', True)
                         save_game_progress(saved_progress)
                         if saved_progress['settings']['speak_quiz_questions']:
@@ -268,9 +329,7 @@ def select_players(layout_state):
                         else:
                             audio.connect_sound.play()
                     
-                    # Speak Quiz Answers toggle
-                    answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(175 * scale), toggle_width, int(20 * scale))
-                    if answers_toggle_rect.collidepoint(pos):
+                    elif rects['answers'].collidepoint(pos):
                         saved_progress['settings']['speak_quiz_answers'] = not saved_progress['settings'].get('speak_quiz_answers', True)
                         save_game_progress(saved_progress)
                         if saved_progress['settings']['speak_quiz_answers']:
@@ -282,9 +341,7 @@ def select_players(layout_state):
                         else:
                             audio.connect_sound.play()
                     
-                    # Device TTS toggle
-                    tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(205 * scale), toggle_width, int(20 * scale))
-                    if tts_source_toggle_rect.collidepoint(pos):
+                    elif rects['tts_source'].collidepoint(pos):
                         saved_progress['settings']['use_device_tts'] = not saved_progress['settings'].get('use_device_tts', False)
                         save_game_progress(saved_progress)
                         if saved_progress['settings']['use_device_tts']:
@@ -292,12 +349,19 @@ def select_players(layout_state):
                         else:
                             if audio.device_tts_off_sound:
                                 audio.device_tts_off_sound.play()
-                    
-                    # Volume slider
-                    slider_width = int(150 * scale)
-                    slider_height = int(10 * scale)
-                    slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, slider_height)
-                    if slider_rect.collidepoint(pos):
+                                
+                    elif godmode_enabled and 'godmode_cycle' in rects and rects['godmode_cycle'].collidepoint(pos):
+                        _cycle_godmode_tile()
+                        audio.connect_sound.play()
+                        
+                    elif godmode_enabled and 'godmode_mute' in rects and rects['godmode_mute'].collidepoint(pos):
+                        saved_progress['settings']['godmode_mute'] = not saved_progress['settings'].get('godmode_mute', False)
+                        save_game_progress(saved_progress)
+                        audio.connect_sound.play()
+                        
+                    elif rects['volume_slider'].collidepoint(pos):
+                        slider_rect = rects['volume_slider']
+                        slider_width = slider_rect.width
                         relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
                         volume = relative_x / slider_width
                         saved_progress['settings']['master_volume'] = volume
@@ -305,14 +369,8 @@ def select_players(layout_state):
                         audio.apply_master_volume(volume)
                         audio.info_sound.play()
                         volume_drag_active = True
-                    
-                    # Reset button
-                    reset_button_width = int(150 * scale)
-                    reset_button_height = int(30 * scale)
-                    reset_button_x = menu_x + (menu_width - reset_button_width) // 2
-                    reset_button_y = menu_y + int(320 * scale)
-                    reset_button_rect = pygame.Rect(reset_button_x, reset_button_y, reset_button_width, reset_button_height)
-                    if reset_button_rect.collidepoint(pos):
+                        
+                    elif rects['reset'].collidepoint(pos):
                         saved_progress['settings']['master_volume'] = 1.0
                         saved_progress['settings']['show_game_status'] = False
                         saved_progress['settings']['use_modern_status_display'] = True
@@ -320,6 +378,8 @@ def select_players(layout_state):
                         saved_progress['settings']['speak_quiz_questions'] = True
                         saved_progress['settings']['speak_quiz_answers'] = True
                         saved_progress['settings']['use_device_tts'] = False
+                        saved_progress['settings']['godmode_mute'] = False
+                        saved_progress['settings']['godmode_tile'] = "B"
                         save_game_progress(saved_progress)
                         audio.restart_sound.play()
                     
@@ -341,14 +401,13 @@ def select_players(layout_state):
             elif event.type == pygame.MOUSEMOTION:
                 if volume_drag_active and settings_menu_rect:
                     pos = event.pos
-                    menu_width = int(200 * scale)
-                    menu_x = settings_menu_rect.x
-                    menu_y = settings_menu_rect.y
-                    slider_width = int(150 * scale)
-                    slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, int(10 * scale))
+                    saved_progress = load_game_progress()
+                    godmode_enabled = saved_progress.get('settings', {}).get('godmode', False)
+                    rects = get_settings_rects(settings_menu_rect, scale, godmode_enabled)
+                    slider_rect = rects['volume_slider']
+                    slider_width = slider_rect.width
                     relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
                     volume = relative_x / slider_width
-                    saved_progress = load_game_progress()
                     if 'settings' not in saved_progress:
                         saved_progress['settings'] = {}
                     saved_progress['settings']['master_volume'] = volume
@@ -452,121 +511,108 @@ def select_players(layout_state):
             
             saved_progress = load_game_progress()
             status_font = pygame.font.SysFont(None, int(22 * scale))
+            godmode_enabled = saved_progress.get('settings', {}).get('godmode', False)
+            rects = get_settings_rects(settings_menu_rect, scale, godmode_enabled)
             
             # Show Game Status
             status_text = status_font.render("Show Game Status:", True, (0, 0, 0))
-            screen.blit(status_text, (menu_x + int(10 * scale), menu_y + int(55 * scale)))
-            
-            toggle_width = int(40 * scale)
-            toggle_height = int(20 * scale)
-            status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(55 * scale), toggle_width, toggle_height)
-            
+            screen.blit(status_text, (menu_x + int(10 * scale), rects['status'].y))
             show_status = saved_progress.get('settings', {}).get('show_game_status', False)
             toggle_colour = (100, 200, 100) if show_status else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_colour, status_toggle_rect, border_radius=int(10 * scale))
-            
-            handle_pos = status_toggle_rect.right - int(18 * scale) if show_status else status_toggle_rect.left + int(2 * scale)
-            handle_rect = pygame.Rect(handle_pos, status_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, toggle_colour, rects['status'], border_radius=int(10 * scale))
+            handle_pos = rects['status'].right - int(18 * scale) if show_status else rects['status'].left + int(2 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['status'].y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
             # Status Display
             style_text = status_font.render("Status Display:", True, (0, 0, 0))
-            screen.blit(style_text, (menu_x + int(10 * scale), menu_y + int(85 * scale)))
-            
-            style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(85 * scale), toggle_width, toggle_height)
-            
+            screen.blit(style_text, (menu_x + int(10 * scale), rects['style'].y))
             use_modern = saved_progress.get('settings', {}).get('use_modern_status_display', True)
             toggle_colour = (100, 200, 100) if use_modern else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_colour, style_toggle_rect, border_radius=int(10 * scale))
-            
-            handle_pos = style_toggle_rect.right - int(18 * scale) if use_modern else style_toggle_rect.left + int(2 * scale)
-            handle_rect = pygame.Rect(handle_pos, style_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, toggle_colour, rects['style'], border_radius=int(10 * scale))
+            handle_pos = rects['style'].right - int(18 * scale) if use_modern else rects['style'].left + int(2 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['style'].y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
             # Show Timers
             timer_text = status_font.render("Show Timers:", True, (0, 0, 0))
-            screen.blit(timer_text, (menu_x + int(10 * scale), menu_y + int(115 * scale)))
-            
-            timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(115 * scale), toggle_width, toggle_height)
-            
+            screen.blit(timer_text, (menu_x + int(10 * scale), rects['timer'].y))
             show_timers = saved_progress.get('settings', {}).get('show_timers', False)
             toggle_colour = (100, 200, 100) if show_timers else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_colour, timer_toggle_rect, border_radius=int(10 * scale))
-            
-            handle_pos = timer_toggle_rect.right - int(18 * scale) if show_timers else timer_toggle_rect.left + int(2 * scale)
-            handle_rect = pygame.Rect(handle_pos, timer_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, toggle_colour, rects['timer'], border_radius=int(10 * scale))
+            handle_pos = rects['timer'].right - int(18 * scale) if show_timers else rects['timer'].left + int(2 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['timer'].y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
             # Speak Quiz Questions
             questions_text = status_font.render("Speak Quiz Questions:", True, (0, 0, 0))
-            screen.blit(questions_text, (menu_x + int(10 * scale), menu_y + int(145 * scale)))
-            
-            questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(145 * scale), toggle_width, toggle_height)
-            
+            screen.blit(questions_text, (menu_x + int(10 * scale), rects['questions'].y))
             speak_questions = saved_progress.get('settings', {}).get('speak_quiz_questions', True)
             toggle_colour = (100, 200, 100) if speak_questions else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_colour, questions_toggle_rect, border_radius=int(10 * scale))
-            
-            handle_pos = questions_toggle_rect.right - int(18 * scale) if speak_questions else questions_toggle_rect.left + int(2 * scale)
-            handle_rect = pygame.Rect(handle_pos, questions_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, toggle_colour, rects['questions'], border_radius=int(10 * scale))
+            handle_pos = rects['questions'].right - int(18 * scale) if speak_questions else rects['questions'].left + int(2 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['questions'].y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
             # Speak Quiz Answers
             answers_text = status_font.render("Speak Quiz Answers:", True, (0, 0, 0))
-            screen.blit(answers_text, (menu_x + int(10 * scale), menu_y + int(175 * scale)))
-            
-            answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(175 * scale), toggle_width, toggle_height)
-            
+            screen.blit(answers_text, (menu_x + int(10 * scale), rects['answers'].y))
             speak_answers = saved_progress.get('settings', {}).get('speak_quiz_answers', True)
             toggle_colour = (100, 200, 100) if speak_answers else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_colour, answers_toggle_rect, border_radius=int(10 * scale))
-            
-            handle_pos = answers_toggle_rect.right - int(18 * scale) if speak_answers else answers_toggle_rect.left + int(2 * scale)
-            handle_rect = pygame.Rect(handle_pos, answers_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, toggle_colour, rects['answers'], border_radius=int(10 * scale))
+            handle_pos = rects['answers'].right - int(18 * scale) if speak_answers else rects['answers'].left + int(2 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['answers'].y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
             # Device TTS
             source_text = status_font.render("Device TTS:", True, (0, 0, 0))
-            screen.blit(source_text, (menu_x + int(10 * scale), menu_y + int(205 * scale)))
-            
-            tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(205 * scale), toggle_width, toggle_height)
-            
+            screen.blit(source_text, (menu_x + int(10 * scale), rects['tts_source'].y))
             use_device_tts = saved_progress.get('settings', {}).get('use_device_tts', False)
             toggle_colour = (100, 200, 100) if use_device_tts else (150, 150, 150)
-            pygame.draw.rect(screen, toggle_colour, tts_source_toggle_rect, border_radius=int(10 * scale))
-            
-            handle_pos = tts_source_toggle_rect.right - int(18 * scale) if use_device_tts else tts_source_toggle_rect.left + int(2 * scale)
-            handle_rect = pygame.Rect(handle_pos, tts_source_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, toggle_colour, rects['tts_source'], border_radius=int(10 * scale))
+            handle_pos = rects['tts_source'].right - int(18 * scale) if use_device_tts else rects['tts_source'].left + int(2 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['tts_source'].y + int(2 * scale), int(16 * scale), int(16 * scale))
             pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+
+            # Godmode
+            if godmode_enabled:
+                godmode_text = status_font.render("Godmode:", True, (180, 50, 180))
+                screen.blit(godmode_text, (menu_x + int(10 * scale), rects['godmode_mute'].y))
+                
+                # Render cycle button
+                pygame.draw.rect(screen, (220, 220, 220), rects['godmode_cycle'], border_radius=int(4 * scale))
+                pygame.draw.rect(screen, (100, 100, 100), rects['godmode_cycle'], 1, border_radius=int(4 * scale))
+                current_tile = saved_progress.get('settings', {}).get('godmode_tile', 'B')
+                tile_text = status_font.render(current_tile, True, (0, 0, 0))
+                tile_text_rect = tile_text.get_rect(center=rects['godmode_cycle'].center)
+                screen.blit(tile_text, tile_text_rect)
+                
+                # Render mute toggle
+                is_muted = saved_progress.get('settings', {}).get('godmode_mute', False)
+                toggle_colour = (150, 150, 150) if is_muted else (180, 50, 180)
+                pygame.draw.rect(screen, toggle_colour, rects['godmode_mute'], border_radius=int(10 * scale))
+                handle_pos = rects['godmode_mute'].left + int(2 * scale) if is_muted else rects['godmode_mute'].right - int(18 * scale)
+                handle_rect = pygame.Rect(handle_pos, rects['godmode_mute'].y + int(2 * scale), int(16 * scale), int(16 * scale))
+                pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
             
             # Master Volume
+            slider_rect = rects['volume_slider']
             volume_text = status_font.render("Master Volume:", True, (0, 0, 0))
-            screen.blit(volume_text, (menu_x + int(10 * scale), menu_y + int(235 * scale)))
-            
-            slider_width = int(150 * scale)
-            slider_height = int(10 * scale)
-            slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, slider_height)
-            
+            screen.blit(volume_text, (menu_x + int(10 * scale), slider_rect.y - int(25 * scale)))
             pygame.draw.rect(screen, (150, 150, 150), slider_rect, border_radius=int(5 * scale))
             
-            # Get current volume from progress
             volume = saved_progress.get('settings', {}).get('master_volume', 1.0)
-            handle_pos = slider_rect.left + int(volume * slider_width)
+            handle_pos = slider_rect.left + int(volume * slider_rect.width)
             handle_rect = pygame.Rect(handle_pos - int(8 * scale), slider_rect.y - int(5 * scale), int(16 * scale), int(20 * scale))
             pygame.draw.rect(screen, (80, 80, 230), handle_rect, border_radius=int(8 * scale))
             
             # Note text
             note_font = pygame.font.SysFont(None, int(18 * scale))
             note_text = note_font.render("this will apply in game", True, (100, 100, 100))
-            screen.blit(note_text, (menu_x + int(10 * scale), menu_y + int(290 * scale)))
+            screen.blit(note_text, (menu_x + int(10 * scale), slider_rect.y + int(20 * scale)))
             
             # Reset button
-            reset_button_width = int(150 * scale)
-            reset_button_height = int(30 * scale)
-            reset_button_x = menu_x + (menu_width - reset_button_width) // 2
-            reset_button_y = menu_y + int(320 * scale)
-            reset_button_rect = pygame.Rect(reset_button_x, reset_button_y, reset_button_width, reset_button_height)
-            
+            reset_button_rect = rects['reset']
             pygame.draw.rect(screen, (220, 220, 220), reset_button_rect, border_radius=int(5 * scale))
             pygame.draw.rect(screen, (100, 100, 100), reset_button_rect, 2, border_radius=int(5 * scale))
             

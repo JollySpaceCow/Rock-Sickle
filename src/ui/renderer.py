@@ -336,6 +336,208 @@ def draw_jail_free_micro_card(screen, pos, scale, camera_zoom, alpha=255):
     screen.blit(shadow, shadow_rect.topleft)
     screen.blit(card, card_rect.topleft)
 
+
+_FRAGMENT_COLOURS = [
+    (255, 255, 255),  # White  (75%)
+    (255, 255, 255),
+    (255, 255, 255),
+    (255, 0, 134),    # #ff0086 pink  (25%)
+]
+
+
+def _seed_fragments(screen_w, screen_h, explode_x, explode_y, scale):
+    """Create a list of physics fragment dicts at the explosion origin."""
+    fragments = []
+    num_fragments = random.randint(14, 22)
+    for _ in range(num_fragments):
+        angle = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(80, 320) * scale
+        size = random.randint(max(3, int(4 * scale)), max(6, int(12 * scale)))
+        shape = random.choice(['rect', 'circle', 'triangle'])
+        colour = random.choice(_FRAGMENT_COLOURS)
+        fragments.append({
+            'x': float(explode_x),
+            'y': float(explode_y),
+            'vx': math.cos(angle) * speed,
+            'vy': math.sin(angle) * speed - random.uniform(50, 200) * scale,
+            'size': size,
+            'shape': shape,
+            'colour': colour,
+            'rotation': random.uniform(0, 360),
+            'rot_speed': random.uniform(-400, 400),
+            'bounce_factor': random.uniform(0.25, 0.55),
+            'friction': random.uniform(0.80, 0.94),
+            'settled': False,
+        })
+    return fragments
+
+
+def draw_jail_free_card_explosion(
+    screen, players, game_state, scale, offset_x, offset_y
+):
+    """Render the Get Out of Jail Free card glide-to-jail and explode animation.
+
+    Phase 'glide'  : the card image travels from the player token toward jail.
+    Phase 'explode': coloured fragments bounce with gravity and settle at the
+                     bottom of the screen.
+
+    Complies with Australian English spelling conventions.
+    """
+    from src.ui import camera as _camera
+    from src.core import audio as _audio
+
+    board_type = game_state.get('selected_board', 'Classic')
+    if board_type == 'Expert':
+        jail_board = EXPERT_JAIL_POS
+    elif board_type == 'Secret':
+        jail_board = SECRET_JAIL_POS
+    else:
+        jail_board = CLASSIC_JAIL_POS
+
+    camera_zoom = game_state.get('camera_zoom', 1.0)
+    screen_w = screen.get_width()
+    screen_h = screen.get_height()
+    current_time = time.time()
+
+    image = AssetRegistry.bonus_result_images_original.get('expert_jail_free_micro')
+
+    # Gravity constant (pixels per second squared, in screen-space)
+    GRAVITY = 600 * scale
+
+    for player in players:
+        for anim in player.active_animations:
+            if anim.get('type') != 'jail_free_explode':
+                continue
+
+            phase = anim.get('phase', 'glide')
+
+            if phase == 'glide':
+                elapsed = current_time - anim['start_time']
+                t = min(1.0, elapsed / anim['glide_duration'])
+                # Ease-out cubic
+                ease_t = 1.0 - (1.0 - t) ** 3
+
+                start_bx, start_by = anim['glide_start_board']
+                end_bx, end_by = anim['glide_end_board']
+
+                bx = start_bx + (end_bx - start_bx) * ease_t
+                by = start_by + (end_by - start_by) * ease_t
+
+                sx, sy = _camera.transform_coords(
+                    bx, by, scale, game_state, screen_w, screen_h
+                )
+
+                if image is not None:
+                    card_w = max(16, int(40 * scale * camera_zoom))
+                    card_h = max(12, int(card_w * image.get_height() / image.get_width()))
+                    card = pygame.transform.smoothscale(image, (card_w, card_h))
+                    # Slight spin during glide
+                    spin_angle = ease_t * 30
+                    card = pygame.transform.rotate(card, spin_angle)
+                    card_rect = card.get_rect(center=(int(sx), int(sy)))
+                    screen.blit(card, card_rect.topleft)
+                else:
+                    # Fallback: plain coloured rectangle
+                    rect = pygame.Rect(int(sx) - 12, int(sy) - 8, 24, 16)
+                    pygame.draw.rect(screen, (255, 220, 60), rect, border_radius=2)
+
+            elif phase == 'explode':
+                explode_start = anim.get('explode_start_time', current_time)
+                elapsed = current_time - explode_start
+
+                # Seed fragments once (first render frame of explode phase)
+                if anim.get('fragments') is None:
+                    end_bx, end_by = anim['glide_end_board']
+                    ex, ey = _camera.transform_coords(
+                        end_bx, end_by, scale, game_state, screen_w, screen_h
+                    )
+                    anim['fragments'] = _seed_fragments(screen_w, screen_h, ex, ey, scale)
+                    anim['last_fragment_time'] = explode_start
+                    # Play explosion sound on first frame
+                    if not anim.get('sound_played', False):
+                        if _audio.explosion_sound is not None:
+                            _audio.explosion_sound.play()
+                        anim['sound_played'] = True
+                    # Trigger screen shake
+                    game_state['camera_shake_start'] = explode_start
+                    game_state['camera_shake_duration'] = 0.5
+                    game_state['camera_shake_intensity'] = 10.0
+
+                dt = current_time - anim.get('last_fragment_time', current_time)
+                anim['last_fragment_time'] = current_time
+                # Cap dt to avoid huge jumps on slow frames
+                dt = min(dt, 0.05)
+
+                bottom_y = screen_h - int(6 * scale)
+
+                for frag in anim['fragments']:
+                    if not frag['settled']:
+                        frag['vy'] += GRAVITY * dt
+                        frag['vx'] *= frag['friction']
+                        frag['x'] += frag['vx'] * dt
+                        frag['y'] += frag['vy'] * dt
+                        frag['rotation'] = (frag['rotation'] + frag['rot_speed'] * dt) % 360
+
+                        # Bounce off bottom
+                        if frag['y'] >= bottom_y:
+                            frag['y'] = bottom_y
+                            frag['vy'] *= -frag['bounce_factor']
+                            frag['vx'] *= frag['friction']
+                            if abs(frag['vy']) < 20 * scale:
+                                frag['vy'] = 0
+                                frag['vx'] *= 0.6
+                                if abs(frag['vx']) < 5 * scale:
+                                    frag['settled'] = True
+
+                        # Wrap at screen edges horizontally
+                        frag['x'] = max(frag['size'], min(screen_w - frag['size'], frag['x']))
+
+                    # Draw fragment
+                    sz = frag['size']
+                    col = frag['colour']
+                    fx = int(frag['x'])
+                    fy = int(frag['y'])
+
+                    if frag['shape'] == 'circle':
+                        surf = pygame.Surface((sz * 2, sz * 2), pygame.SRCALPHA)
+                        pygame.draw.circle(surf, col + (220,), (sz, sz), sz)
+                        screen.blit(surf, (fx - sz, fy - sz))
+                    elif frag['shape'] == 'triangle':
+                        rot_rad = math.radians(frag['rotation'])
+                        pts = []
+                        for ang in [0, 2.094, 4.189]:
+                            pts.append((
+                                fx + int(sz * math.cos(rot_rad + ang)),
+                                fy + int(sz * math.sin(rot_rad + ang)),
+                            ))
+                        surf = pygame.Surface((sz * 4, sz * 4), pygame.SRCALPHA)
+                        local_pts = [
+                            (int(sz * 2 + sz * math.cos(rot_rad + ang)),
+                             int(sz * 2 + sz * math.sin(rot_rad + ang)))
+                            for ang in [0, 2.094, 4.189]
+                        ]
+                        pygame.draw.polygon(surf, col + (220,), local_pts)
+                        screen.blit(surf, (fx - sz * 2, fy - sz * 2))
+                    else:  # rect
+                        rot_rad = math.radians(frag['rotation'])
+                        half_w = sz
+                        half_h = max(2, sz // 2)
+                        corners = [
+                            (-half_w, -half_h), (half_w, -half_h),
+                            (half_w, half_h), (-half_w, half_h)
+                        ]
+                        surf = pygame.Surface((half_w * 4, half_h * 4), pygame.SRCALPHA)
+                        local_pts = [
+                            (
+                                half_w * 2 + int(cx * math.cos(rot_rad) - cy * math.sin(rot_rad)),
+                                half_h * 2 + int(cx * math.sin(rot_rad) + cy * math.cos(rot_rad))
+                            )
+                            for cx, cy in corners
+                        ]
+                        pygame.draw.polygon(surf, col + (220,), local_pts)
+                        screen.blit(surf, (fx - half_w * 2, fy - half_h * 2))
+
+
 def draw_player_badge(screen, player, badge_pos, badge_size, player_colours, cpu_difficulty_images_scaled, cpu_image_scaled, player_images_scaled):
     """Helper for drawing player badge on quiz card."""
     outer_radius = badge_size // 2
@@ -985,9 +1187,16 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
     screen.blit(AssetRegistry.magnify_button_scaled, magnify_button_rect.topleft)
 
     # Settings panel overlays
+    # Settings panel overlays
     if game_state.get('show_settings_menu', False):
+        from src.core.progress import load_game_progress
+        from src.ui.menus import get_settings_rects
+        
+        saved_progress = load_game_progress()
+        godmode_enabled = saved_progress.get('settings', {}).get('godmode', False)
+        
         menu_width = int(200 * scale)
-        menu_height = int(370 * scale)
+        menu_height = int((400 if godmode_enabled else 370) * scale)
         
         menu_x = settings_button_rect.x + (settings_button_rect.width // 2) - (menu_width // 2)
         menu_y = settings_button_rect.y - menu_height - int(10 * scale)
@@ -1012,116 +1221,117 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
         
         pygame.draw.line(screen, (150, 150, 150), (menu_x + int(5 * scale), menu_y + int(40 * scale)), (menu_x + menu_width - int(5 * scale), menu_y + int(40 * scale)), 1)
         
+        rects = get_settings_rects(menu_rect, scale, godmode_enabled)
         status_font = pygame.font.SysFont(None, int(22 * scale))
+        
+        # Show Game Status
         status_text = status_font.render("Show Game Status:", True, (0, 0, 0))
-        screen.blit(status_text, (menu_x + int(10 * scale), menu_y + int(55 * scale)))
-        
-        toggle_width = int(40 * scale)
-        toggle_height = int(20 * scale)
-        status_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(55 * scale), toggle_width, toggle_height)
-        
-        toggle_color = (100, 200, 100) if game_state.get('show_game_status', False) else (150, 150, 150)
-        pygame.draw.rect(screen, toggle_color, status_toggle_rect, border_radius=int(10 * scale))
-        
-        handle_pos = status_toggle_rect.right - int(18 * scale) if game_state.get('show_game_status', False) else status_toggle_rect.left + int(2 * scale)
-        handle_rect = pygame.Rect(handle_pos, status_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        screen.blit(status_text, (menu_x + int(10 * scale), rects['status'].y))
+        show_status = game_state.get('show_game_status', False)
+        toggle_colour = (100, 200, 100) if show_status else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_colour, rects['status'], border_radius=int(10 * scale))
+        handle_pos = rects['status'].right - int(18 * scale) if show_status else rects['status'].left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, rects['status'].y + int(2 * scale), int(16 * scale), int(16 * scale))
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+        game_state['status_toggle_rect'] = rects['status']
         
-        game_state['status_toggle_rect'] = status_toggle_rect
-        
+        # Status Display
         style_text = status_font.render("Status Display:", True, (0, 0, 0))
-        screen.blit(style_text, (menu_x + int(10 * scale), menu_y + int(85 * scale)))
-        
-        style_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(85 * scale), toggle_width, toggle_height)
-        
-        toggle_color = (100, 200, 100) if game_state.get('use_modern_status_display', True) else (150, 150, 150)
-        pygame.draw.rect(screen, toggle_color, style_toggle_rect, border_radius=int(10 * scale))
-        
-        handle_pos = style_toggle_rect.right - int(18 * scale) if game_state.get('use_modern_status_display', True) else style_toggle_rect.left + int(2 * scale)
-        handle_rect = pygame.Rect(handle_pos, style_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        screen.blit(style_text, (menu_x + int(10 * scale), rects['style'].y))
+        use_modern = game_state.get('use_modern_status_display', True)
+        toggle_colour = (100, 200, 100) if use_modern else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_colour, rects['style'], border_radius=int(10 * scale))
+        handle_pos = rects['style'].right - int(18 * scale) if use_modern else rects['style'].left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, rects['style'].y + int(2 * scale), int(16 * scale), int(16 * scale))
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+        game_state['style_toggle_rect'] = rects['style']
         
-        game_state['style_toggle_rect'] = style_toggle_rect
-        
+        # Show Timers
         timer_text = status_font.render("Show Timers:", True, (0, 0, 0))
-        screen.blit(timer_text, (menu_x + int(10 * scale), menu_y + int(115 * scale)))
-        
-        timer_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(115 * scale), toggle_width, toggle_height)
-        
-        toggle_color = (100, 200, 100) if game_state.get('show_timers', True) else (150, 150, 150)
-        pygame.draw.rect(screen, toggle_color, timer_toggle_rect, border_radius=int(10 * scale))
-        
-        handle_pos = timer_toggle_rect.right - int(18 * scale) if game_state.get('show_timers', True) else timer_toggle_rect.left + int(2 * scale)
-        handle_rect = pygame.Rect(handle_pos, timer_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        screen.blit(timer_text, (menu_x + int(10 * scale), rects['timer'].y))
+        show_timers = game_state.get('show_timers', True)
+        toggle_colour = (100, 200, 100) if show_timers else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_colour, rects['timer'], border_radius=int(10 * scale))
+        handle_pos = rects['timer'].right - int(18 * scale) if show_timers else rects['timer'].left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, rects['timer'].y + int(2 * scale), int(16 * scale), int(16 * scale))
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+        game_state['timer_toggle_rect'] = rects['timer']
         
-        game_state['timer_toggle_rect'] = timer_toggle_rect
-        
+        # Speak Quiz Questions
         questions_text = status_font.render("Speak Quiz Questions:", True, (0, 0, 0))
-        screen.blit(questions_text, (menu_x + int(10 * scale), menu_y + int(145 * scale)))
-        
-        questions_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(145 * scale), toggle_width, toggle_height)
-        
-        toggle_color = (100, 200, 100) if game_state.get('speak_quiz_questions', True) else (150, 150, 150)
-        pygame.draw.rect(screen, toggle_color, questions_toggle_rect, border_radius=int(10 * scale))
-        
-        handle_pos = questions_toggle_rect.right - int(18 * scale) if game_state.get('speak_quiz_questions', True) else questions_toggle_rect.left + int(2 * scale)
-        handle_rect = pygame.Rect(handle_pos, questions_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        screen.blit(questions_text, (menu_x + int(10 * scale), rects['questions'].y))
+        speak_questions = game_state.get('speak_quiz_questions', True)
+        toggle_colour = (100, 200, 100) if speak_questions else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_colour, rects['questions'], border_radius=int(10 * scale))
+        handle_pos = rects['questions'].right - int(18 * scale) if speak_questions else rects['questions'].left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, rects['questions'].y + int(2 * scale), int(16 * scale), int(16 * scale))
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+        game_state['questions_toggle_rect'] = rects['questions']
         
-        game_state['questions_toggle_rect'] = questions_toggle_rect
-        
+        # Speak Quiz Answers
         answers_text = status_font.render("Speak Quiz Answers:", True, (0, 0, 0))
-        screen.blit(answers_text, (menu_x + int(10 * scale), menu_y + int(175 * scale)))
-        
-        answers_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(175 * scale), toggle_width, toggle_height)
-        
-        toggle_color = (100, 200, 100) if game_state.get('speak_quiz_answers', True) else (150, 150, 150)
-        pygame.draw.rect(screen, toggle_color, answers_toggle_rect, border_radius=int(10 * scale))
-        
-        handle_pos = answers_toggle_rect.right - int(18 * scale) if game_state.get('speak_quiz_answers', True) else answers_toggle_rect.left + int(2 * scale)
-        handle_rect = pygame.Rect(handle_pos, answers_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        screen.blit(answers_text, (menu_x + int(10 * scale), rects['answers'].y))
+        speak_answers = game_state.get('speak_quiz_answers', True)
+        toggle_colour = (100, 200, 100) if speak_answers else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_colour, rects['answers'], border_radius=int(10 * scale))
+        handle_pos = rects['answers'].right - int(18 * scale) if speak_answers else rects['answers'].left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, rects['answers'].y + int(2 * scale), int(16 * scale), int(16 * scale))
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
-        
-        game_state['answers_toggle_rect'] = answers_toggle_rect
-
+        game_state['answers_toggle_rect'] = rects['answers']
+ 
+        # Device TTS
         source_text = status_font.render("Device TTS:", True, (0, 0, 0))
-        screen.blit(source_text, (menu_x + int(10 * scale), menu_y + int(205 * scale)))
-
-        tts_source_toggle_rect = pygame.Rect(menu_x + menu_width - toggle_width - int(10 * scale), menu_y + int(205 * scale), toggle_width, toggle_height)
-
-        toggle_color = (100, 200, 100) if game_state.get('use_device_tts', False) else (150, 150, 150)
-        pygame.draw.rect(screen, toggle_color, tts_source_toggle_rect, border_radius=int(10 * scale))
-
-        handle_pos = tts_source_toggle_rect.right - int(18 * scale) if game_state.get('use_device_tts', False) else tts_source_toggle_rect.left + int(2 * scale)
-        handle_rect = pygame.Rect(handle_pos, tts_source_toggle_rect.y + int(2 * scale), int(16 * scale), int(16 * scale))
+        screen.blit(source_text, (menu_x + int(10 * scale), rects['tts_source'].y))
+        use_device_tts = game_state.get('use_device_tts', False)
+        toggle_colour = (100, 200, 100) if use_device_tts else (150, 150, 150)
+        pygame.draw.rect(screen, toggle_colour, rects['tts_source'], border_radius=int(10 * scale))
+        handle_pos = rects['tts_source'].right - int(18 * scale) if use_device_tts else rects['tts_source'].left + int(2 * scale)
+        handle_rect = pygame.Rect(handle_pos, rects['tts_source'].y + int(2 * scale), int(16 * scale), int(16 * scale))
         pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
-
-        game_state['tts_source_toggle_rect'] = tts_source_toggle_rect
+        game_state['tts_source_toggle_rect'] = rects['tts_source']
+ 
+        # Godmode
+        if godmode_enabled:
+            godmode_text = status_font.render("Godmode:", True, (180, 50, 180))
+            screen.blit(godmode_text, (menu_x + int(10 * scale), rects['godmode_mute'].y))
+            
+            # Render cycle button
+            pygame.draw.rect(screen, (220, 220, 220), rects['godmode_cycle'], border_radius=int(4 * scale))
+            pygame.draw.rect(screen, (100, 100, 100), rects['godmode_cycle'], 1, border_radius=int(4 * scale))
+            current_tile = saved_progress.get('settings', {}).get('godmode_tile', 'B')
+            tile_text = status_font.render(current_tile, True, (0, 0, 0))
+            tile_text_rect = tile_text.get_rect(center=rects['godmode_cycle'].center)
+            screen.blit(tile_text, tile_text_rect)
+            game_state['godmode_cycle_rect'] = rects['godmode_cycle']
+            
+            # Render mute toggle
+            is_muted = saved_progress.get('settings', {}).get('godmode_mute', False)
+            toggle_colour = (150, 150, 150) if is_muted else (180, 50, 180)
+            pygame.draw.rect(screen, toggle_colour, rects['godmode_mute'], border_radius=int(10 * scale))
+            handle_pos = rects['godmode_mute'].left + int(2 * scale) if is_muted else rects['godmode_mute'].right - int(18 * scale)
+            handle_rect = pygame.Rect(handle_pos, rects['godmode_mute'].y + int(2 * scale), int(16 * scale), int(16 * scale))
+            pygame.draw.rect(screen, (240, 240, 240), handle_rect, border_radius=int(8 * scale))
+            game_state['godmode_mute_rect'] = rects['godmode_mute']
+        else:
+            game_state.pop('godmode_cycle_rect', None)
+            game_state.pop('godmode_mute_rect', None)
         
+        # Master Volume
+        slider_rect = rects['volume_slider']
         volume_text = status_font.render("Master Volume:", True, (0, 0, 0))
-        screen.blit(volume_text, (menu_x + int(10 * scale), menu_y + int(235 * scale)))
-        
-        slider_width = int(150 * scale)
-        slider_height = int(10 * scale)
-        slider_rect = pygame.Rect(menu_x + int(25 * scale), menu_y + int(260 * scale), slider_width, slider_height)
-        
+        screen.blit(volume_text, (menu_x + int(10 * scale), slider_rect.y - int(25 * scale)))
         pygame.draw.rect(screen, (150, 150, 150), slider_rect, border_radius=int(5 * scale))
         
         volume = game_state.get('master_volume', 1.0)
-        handle_pos = slider_rect.left + int(volume * slider_width)
+        handle_pos = slider_rect.left + int(volume * slider_rect.width)
         handle_rect = pygame.Rect(handle_pos - int(8 * scale), slider_rect.y - int(5 * scale), int(16 * scale), int(20 * scale))
         pygame.draw.rect(screen, (80, 80, 230), handle_rect, border_radius=int(8 * scale))
         
         game_state['volume_slider_rect'] = slider_rect
-        game_state['volume_slider_width'] = slider_width
+        game_state['volume_slider_width'] = slider_rect.width
         
-        reset_button_width = int(150 * scale)
-        reset_button_height = int(30 * scale)
-        reset_button_x = menu_x + (menu_width - reset_button_width) // 2
-        reset_button_y = menu_y + int(320 * scale)
-        reset_button_rect = pygame.Rect(reset_button_x, reset_button_y, reset_button_width, reset_button_height)
-        
+        # Reset button
+        reset_button_rect = rects['reset']
         pygame.draw.rect(screen, (220, 220, 220), reset_button_rect, border_radius=int(5 * scale))
         pygame.draw.rect(screen, (100, 100, 100), reset_button_rect, 2, border_radius=int(5 * scale))
         
@@ -1764,6 +1974,9 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
             pygame.draw.circle(car_surface, (255, 255, 0, 255), (car_size//2, car_size//2), car_size//2)
             pygame.draw.circle(car_surface, (0, 0, 0, 255), (car_size//2, car_size//2), car_size//2, 2)
             screen.blit(car_surface, (car_x - car_size//2, car_y - car_size//2))
+
+    # Get Out of Jail Free card glide and explosion overlay — drawn topmost
+    draw_jail_free_card_explosion(screen, players, game_state, scale, offset_x, offset_y)
 
     quiz_answer_rects = game_state.get('quiz_buttons', [])
     return dice_rect, restart_button_rect, achievement_button_rect, settings_button_rect, magnify_button_rect, quiz_answer_rects if game_state.get('quiz_buttons') else []

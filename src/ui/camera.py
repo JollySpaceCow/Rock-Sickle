@@ -4,10 +4,14 @@ Provides functions to transform world coordinates to screen coordinates
 and update camera target zoom/focus based on the camera mode.
 """
 
+import math
+import time
+
 def transform_coords(x, y, scale, game_state, screen_width, screen_height):
     """Transform world coordinates to screen coordinates based on camera state.
     
     All inputs and calculations use Australian English spelling conventions.
+    Applies camera shake offset when active.
     """
     camera_zoom = game_state.get('camera_zoom', 1.0)
     camera_focus_x = game_state.get('camera_focus_x', 400.0)
@@ -20,7 +24,21 @@ def transform_coords(x, y, scale, game_state, screen_width, screen_height):
     # Scale by camera zoom and window scale
     screen_x = rel_x * camera_zoom * scale + screen_width / 2
     screen_y = rel_y * camera_zoom * scale + screen_height / 2
-    
+
+    # Apply camera shake if active
+    shake_start = game_state.get('camera_shake_start')
+    if shake_start is not None:
+        shake_duration = game_state.get('camera_shake_duration', 0.4)
+        shake_intensity = game_state.get('camera_shake_intensity', 8.0)
+        elapsed = time.time() - shake_start
+        if elapsed < shake_duration:
+            decay = 1.0 - (elapsed / shake_duration)
+            screen_x += math.sin(elapsed * 55) * shake_intensity * decay
+            screen_y += math.cos(elapsed * 47) * shake_intensity * decay
+        else:
+            # Shake finished — clear the key so future frames skip this branch
+            game_state.pop('camera_shake_start', None)
+
     return int(screen_x), int(screen_y)
 
 def update_camera_targets(game_state, players):

@@ -6,9 +6,14 @@ from src.core.progress import load_game_progress, save_game_progress
 from src.constants import ORIGINAL_WIDTH, ORIGINAL_HEIGHT, DIE_POS, JAIL_SIZE
 
 def get_settings_menu_rect(settings_button_rect, scale, screen):
-    """Return the settings menu rectangle using the same clamping as the renderer."""
+    """Return the settings menu rectangle using the same clamping as the renderer.
+    
+    Complies with Australian English spelling conventions.
+    """
+    saved_progress = load_game_progress()
+    godmode_enabled = saved_progress.get('settings', {}).get('godmode', False)
     menu_width = int(200 * scale)
-    menu_height = int(370 * scale)
+    menu_height = int((400 if godmode_enabled else 370) * scale)
     menu_x = settings_button_rect.x + (settings_button_rect.width // 2) - (menu_width // 2)
     menu_y = settings_button_rect.y - menu_height - int(10 * scale)
 
@@ -218,15 +223,32 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                 menu_rect = get_settings_menu_rect(settings_button_rect, scale, screen)
 
                 if menu_rect.collidepoint(pos):
-                    if 'status_toggle_rect' in game_state and game_state['status_toggle_rect'].collidepoint(pos):
+                    saved_progress = load_game_progress()
+                    godmode_enabled = saved_progress.get('settings', {}).get('godmode', False)
+                    
+                    from src.ui.menus import get_settings_rects
+                    rects = get_settings_rects(menu_rect, scale, godmode_enabled)
+                    
+                    if rects['status'].collidepoint(pos):
                         game_state['show_game_status'] = not game_state.get('show_game_status', True)
-                    if 'style_toggle_rect' in game_state and game_state['style_toggle_rect'].collidepoint(pos):
+                        saved_progress['settings']['show_game_status'] = game_state['show_game_status']
+                        save_game_progress(saved_progress)
+                    
+                    elif rects['style'].collidepoint(pos):
                         game_state['use_modern_status_display'] = not game_state.get('use_modern_status_display', False)
-                    if 'timer_toggle_rect' in game_state and game_state['timer_toggle_rect'].collidepoint(pos):
+                        saved_progress['settings']['use_modern_status_display'] = game_state['use_modern_status_display']
+                        save_game_progress(saved_progress)
+                    
+                    elif rects['timer'].collidepoint(pos):
                         game_state['show_timers'] = not game_state.get('show_timers', False)
+                        saved_progress['settings']['show_timers'] = game_state['show_timers']
+                        save_game_progress(saved_progress)
                         audio.connect_sound.play()
-                    if 'questions_toggle_rect' in game_state and game_state['questions_toggle_rect'].collidepoint(pos):
+                    
+                    elif rects['questions'].collidepoint(pos):
                         game_state['speak_quiz_questions'] = not game_state.get('speak_quiz_questions', True)
+                        saved_progress['settings']['speak_quiz_questions'] = game_state['speak_quiz_questions']
+                        save_game_progress(saved_progress)
                         if not game_state['speak_quiz_questions']:
                             quiz_tts.stop_question_tts()
                         if game_state['speak_quiz_questions']:
@@ -237,8 +259,11 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                                     audio.speak_quiz_questions_sound.play()
                         else:
                             audio.connect_sound.play()
-                    if 'answers_toggle_rect' in game_state and game_state['answers_toggle_rect'].collidepoint(pos):
+                    
+                    elif rects['answers'].collidepoint(pos):
                         game_state['speak_quiz_answers'] = not game_state.get('speak_quiz_answers', True)
+                        saved_progress['settings']['speak_quiz_answers'] = game_state['speak_quiz_answers']
+                        save_game_progress(saved_progress)
                         if not game_state['speak_quiz_answers']:
                             quiz_tts.stop_answer_tts()
                         if game_state['speak_quiz_answers']:
@@ -249,8 +274,11 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                                     audio.speak_quiz_answers_sound.play()
                         else:
                             audio.connect_sound.play()
-                    if 'tts_source_toggle_rect' in game_state and game_state['tts_source_toggle_rect'].collidepoint(pos):
+                    
+                    elif rects['tts_source'].collidepoint(pos):
                         game_state['use_device_tts'] = not game_state.get('use_device_tts', False)
+                        saved_progress['settings']['use_device_tts'] = game_state['use_device_tts']
+                        save_game_progress(saved_progress)
                         quiz_tts.set_answer_source(game_state['use_device_tts'])
                         quiz_tts.stop_answer_tts()
                         if game_state['use_device_tts']:
@@ -258,15 +286,50 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                         else:
                             if audio.device_tts_off_sound:
                                 audio.device_tts_off_sound.play()
-                    if 'volume_slider_rect' in game_state and game_state['volume_slider_rect'].collidepoint(pos):
+                                
+                    elif godmode_enabled and 'godmode_cycle' in rects and rects['godmode_cycle'].collidepoint(pos):
+                        from src.ui.menus import _cycle_godmode_tile
+                        _cycle_godmode_tile()
+                        audio.connect_sound.play()
+                        
+                        # Reload squares in-place to update board state immediately
+                        from src.game.board import get_board_squares
+                        new_squares, _ = get_board_squares(game_state.get('selected_board', 'Classic'))
+                        squares[:] = new_squares
+                        
+                    elif godmode_enabled and 'godmode_mute' in rects and rects['godmode_mute'].collidepoint(pos):
+                        saved_progress['settings']['godmode_mute'] = not saved_progress['settings'].get('godmode_mute', False)
+                        save_game_progress(saved_progress)
+                        audio.connect_sound.play()
+                        
+                        # Reload squares in-place to update board state immediately
+                        from src.game.board import get_board_squares
+                        new_squares, _ = get_board_squares(game_state.get('selected_board', 'Classic'))
+                        squares[:] = new_squares
+                        
+                    elif rects['volume_slider'].collidepoint(pos):
                         game_state['volume_drag_active'] = True
-                        slider_rect = game_state['volume_slider_rect']
-                        slider_width = game_state['volume_slider_width']
+                        slider_rect = rects['volume_slider']
+                        slider_width = slider_rect.width
                         relative_x = max(0, min(pos[0] - slider_rect.x, slider_width))
                         volume = relative_x / slider_width
                         game_state['master_volume'] = volume
+                        saved_progress['settings']['master_volume'] = volume
+                        save_game_progress(saved_progress)
                         audio.apply_master_volume(volume)
-                    if 'reset_button_rect' in game_state and game_state['reset_button_rect'].collidepoint(pos):
+                        
+                    elif rects['reset'].collidepoint(pos):
+                        saved_progress['settings']['master_volume'] = 1.0
+                        saved_progress['settings']['show_game_status'] = False
+                        saved_progress['settings']['use_modern_status_display'] = True
+                        saved_progress['settings']['show_timers'] = False
+                        saved_progress['settings']['speak_quiz_questions'] = True
+                        saved_progress['settings']['speak_quiz_answers'] = True
+                        saved_progress['settings']['use_device_tts'] = False
+                        saved_progress['settings']['godmode_mute'] = False
+                        saved_progress['settings']['godmode_tile'] = "B"
+                        save_game_progress(saved_progress)
+                        
                         game_state['master_volume'] = 1.0
                         game_state['show_game_status'] = False
                         game_state['use_modern_status_display'] = True
@@ -274,8 +337,14 @@ def handle_events(events, game_state, players, layout_state, squares, next_posit
                         game_state['speak_quiz_questions'] = True
                         game_state['speak_quiz_answers'] = True
                         game_state['use_device_tts'] = False
+                        
+                        # Reload squares in-place
+                        from src.game.board import get_board_squares
+                        new_squares, _ = get_board_squares(game_state.get('selected_board', 'Classic'))
+                        squares[:] = new_squares
+                        
                         quiz_tts.set_answer_source(False)
-                        audio.apply_master_volume(game_state['master_volume'])
+                        audio.apply_master_volume(1.0)
                         audio.restart_sound.play()
                     continue
 

@@ -46,6 +46,7 @@ info_sound = None
 speak_quiz_questions_sound = None
 speak_quiz_answers_sound = None
 device_tts_off_sound = None
+explosion_sound = None
 
 def init_audio():
     """Initialize and load all audio assets."""
@@ -57,6 +58,7 @@ def init_audio():
     global fairlin_round1_sound, restart_sound, finished_sound, woosh_sound, car_horn_sound
     global bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound, jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound, info_sound
     global speak_quiz_questions_sound, speak_quiz_answers_sound, device_tts_off_sound
+    global explosion_sound
 
     try:
         # Menus
@@ -105,6 +107,9 @@ def init_audio():
         # Test sound for volume adjustment
         info_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Info.wav"))
         
+        # Get Out of Jail Free card explosion sound
+        explosion_sound = pygame.mixer.Sound(load_asset(f"{SOUND_EFFECTS_DIR}/Breaking_Explosion_SeResourceStd2nd_00000541.wav"))
+        
         # Settings toggle feedback sounds
         speak_quiz_questions_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Quiz Announcements/Speak quiz questions.mp3"))
         speak_quiz_answers_sound = pygame.mixer.Sound(load_asset("Assets/Audio/Quiz Announcements/Speak quiz answers.mp3"))
@@ -129,7 +134,8 @@ def apply_master_volume(volume):
         voltage_normal_sound, voltage_hard_sound, whit_sound, restart_sound, finished_sound, woosh_sound,
         car_horn_sound, bonk_cpu_sound, glug_cpu_sound, head_shake_cpu_sound,
         jump_cpu_sound, whiz_cpu_sound, wobble_cpu_sound, doubles_sound, info_sound,
-        speak_quiz_questions_sound, speak_quiz_answers_sound, device_tts_off_sound
+        speak_quiz_questions_sound, speak_quiz_answers_sound, device_tts_off_sound,
+        explosion_sound
     ]
     for sound in sounds:
         if sound is not None:

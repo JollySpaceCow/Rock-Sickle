@@ -105,33 +105,53 @@ def apply_bonus_action(game_state, player, effect, scale, squares, next_position
         else:
             game_state['message'] = f"Player {player.id + 1} can't move back from the start."
     elif effect[0] == "go_to_jail":
-        game_state['game_jail_visit'] = True
-        player.prev_position = player.position
+        # Attempt to spend a Get Out of Jail Free card
         spent_jail_free = spend_jail_free_card_if_held(player, game_state)
-        player.jail_from_x = player.current_x
-        player.jail_from_y = player.current_y
-        player.jail_marker_anim_start = current_time
-
-        jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
-        jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
-        random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
-
-        audio.whiz_sound.play()
-        anim = {
-            'player': player,
-            'start_pos': (player.current_x, player.current_y),
-            'end_pos': random_jail_pos,
-            'steps': 60,
-            'current_step': 0,
-            'last_time': current_time,
-            'message': "Moving to jail.",
-            'is_jail_move': True,
-            'delay': 0.0167,
-            'jail_action': 'enter'
-        }
-        player.active_animations.append(anim)
         if spent_jail_free:
-            game_state['message'] = f"Player {player.id + 1} spent their Get Out of Jail Free card."
+            # Card glides to jail then explodes into smithereens
+            glide_duration = 0.8
+            anim = {
+                'type': 'jail_free_explode',
+                'player': player,
+                'phase': 'glide',
+                'start_time': time.time(),
+                'glide_duration': glide_duration,
+                'glide_start_board': (player.current_x, player.current_y),
+                'glide_end_board': JAIL_POS,
+                # Fragments will be seeded at the start of the explode phase in the renderer
+                'fragments': None,
+                'explode_start_time': None,
+                'explode_duration': 2.5,
+                'sound_played': False,
+            }
+            player.active_animations.append(anim)
+            game_state['message'] = f"Player {player.id + 1} used Get Out of Jail Free card!"
+            player.turn_ended = True
+            # No jail visit increment
+        else:
+            game_state['game_jail_visit'] = True
+            player.prev_position = player.position
+            jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+            jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+            random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
+            audio.whiz_sound.play()
+            anim = {
+                'player': player,
+                'start_pos': (player.current_x, player.current_y),
+                'end_pos': random_jail_pos,
+                'steps': 60,
+                'current_step': 0,
+                'last_time': current_time,
+                'message': "Moving to jail.",
+                'is_jail_move': True,
+                'delay': 0.0167,
+                'jail_action': 'enter'
+            }
+            player.active_animations.append(anim)
+            game_state['message'] = f"Player {player.id + 1} sent to jail."
+            player.turn_ended = True
+            game_state['game_jail_visit'] = True
+            increment_stat("jail_landings")
     elif effect[0] == "jail_free":
         player.has_jail_free_card = True
         player.jail_free_card_visible = False
@@ -403,39 +423,51 @@ def apply_effect(player, square_type, game_state, scale, squares, squares_coords
     elif square_type == 'J':
         player.prev_position = player.position
         spent_jail_free = spend_jail_free_card_if_held(player, game_state)
-        # Store the position where the player is sent to jail from
-        player.jail_from_x = player.current_x
-        player.jail_from_y = player.current_y
-        # Set animation start time for jail marker
-        player.jail_marker_anim_start = time.time()
-        audio.whiz_sound.play()
-        
-        # Calculate a random position within the jail bounds
-        jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
-        jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
-        random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
-        
-        anim = {
-            'player': player,
-            'start_pos': (player.current_x, player.current_y),
-            'end_pos': random_jail_pos,
-            'steps': 60,
-            'current_step': 0,
-            'last_time': time.time(),
-            'message': "Moving to jail.",
-            'is_jail_move': True,
-            'delay': 0.0167,  # ~60fps
-            'jail_action': 'enter'
-        }
-        player.active_animations.append(anim)
         if spent_jail_free:
-            message = f"Player {player.id + 1} sent to jail and spent their Get Out of Jail Free card."
+            # Card glides to jail then explodes into smithereens
+            glide_duration = 0.8
+            anim = {
+                'type': 'jail_free_explode',
+                'player': player,
+                'phase': 'glide',
+                'start_time': time.time(),
+                'glide_duration': glide_duration,
+                'glide_start_board': (player.current_x, player.current_y),
+                'glide_end_board': JAIL_POS,
+                'fragments': None,
+                'explode_start_time': None,
+                'explode_duration': 2.5,
+                'sound_played': False,
+            }
+            player.active_animations.append(anim)
+            game_state['message'] = f"Player {player.id + 1} used Get Out of Jail Free card!"
+            player.turn_ended = True
+            # No jail visit increment or movement
         else:
-            message = f"Player {player.id + 1} sent to jail."
-        player.turn_ended = True
-        game_state['game_jail_visit'] = True
-        
-        increment_stat("jail_landings")
+            player.jail_from_x = player.current_x
+            player.jail_from_y = player.current_y
+            player.jail_marker_anim_start = time.time()
+            jail_offset_x = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+            jail_offset_y = random.randint(-int(JAIL_SIZE/3), int(JAIL_SIZE/3))
+            random_jail_pos = (JAIL_POS[0] + jail_offset_x, JAIL_POS[1] + jail_offset_y)
+            audio.whiz_sound.play()
+            anim = {
+                'player': player,
+                'start_pos': (player.current_x, player.current_y),
+                'end_pos': random_jail_pos,
+                'steps': 60,
+                'current_step': 0,
+                'last_time': time.time(),
+                'message': "Moving to jail.",
+                'is_jail_move': True,
+                'delay': 0.0167,
+                'jail_action': 'enter'
+            }
+            player.active_animations.append(anim)
+            game_state['message'] = f"Player {player.id + 1} sent to jail."
+            player.turn_ended = True
+            game_state['game_jail_visit'] = True
+            increment_stat("jail_landings")
     elif square_type == 'P':
         message = f"Player {player.id + 1} chooses a path."
         if game_state.get('spaces_remaining', 0) == 0:
@@ -670,6 +702,25 @@ def update_animation(game_state, scale, squares, squares_coords, JAIL_POS):
                     player.victory_x = anim['player'].current_x
                     player.victory_y = anim['player'].current_y
                     player.active_animations.pop(0)
+            elif anim.get('type') == 'jail_free_explode':
+                # Phase 1: card glides from player to jail
+                if anim.get('phase') == 'glide':
+                    elapsed = current_time - anim['start_time']
+                    if elapsed >= anim['glide_duration']:
+                        # Transition to explode phase; renderer will seed fragments
+                        anim['phase'] = 'explode'
+                        anim['explode_start_time'] = current_time
+                    any_animations = True
+                # Phase 2: fragments bounce — renderer drives visuals; we just wait
+                elif anim.get('phase') == 'explode':
+                    if anim.get('explode_start_time') is not None:
+                        if current_time - anim['explode_start_time'] >= anim['explode_duration']:
+                            player.active_animations.pop(0)
+                        else:
+                            any_animations = True
+                    else:
+                        # Safety fallback
+                        player.active_animations.pop(0)
             elif 'last_time' in anim and 'delay' in anim and current_time - anim['last_time'] >= anim['delay']:
                 if 'is_jail_move' in anim:
                     if anim.get('sound_played', True):

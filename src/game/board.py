@@ -1,4 +1,5 @@
 import random
+from src.core.progress import load_game_progress
 
 # Cache randomised secret board to prevent flashing on rendering
 # Complies with Australian English spelling conventions
@@ -8,75 +9,92 @@ _cached_secret_next_positions = None
 # Define a small gap between squares (represents 1mm)
 GAP_BETWEEN_TILES = 2  # Pixels representing gap between tiles
 
+def _apply_godmode(squares):
+    """Replace all squares except Go, Finish, and Pick a Path (P) with the current godmode tile type.
+    
+    Complies with Australian English spelling conventions.
+    """
+    saved_progress = load_game_progress()
+    tile_type = saved_progress.get('settings', {}).get('godmode_tile', 'B')
+    for i, sq in enumerate(squares):
+        if sq not in ('Go', 'F', 'P'):
+            squares[i] = tile_type
+    return squares
+
 def get_board_squares(board_type="Classic"):
     global _cached_secret_squares, _cached_secret_next_positions
     
     if board_type == "Classic":
-        return [
+        squares = [
             'Go', '1', '0', 'Q', '-2', 'J', '1', 'B', '0', '0',
             'J', '0', '1', '-2', '1', '-2', '0',
             'B', '0', '-2', 'Q', 'B', 'P',
             '0', '1', 'B', 'J', 'Q', '-2', '0',
             '0', '1', 'J', '-2', 'Q', '-2', '0',
             'F'
-        ], list(range(1, 23)) + [[23, 30]] + list(range(24, 30)) + [37] + list(range(31, 37)) + [37] + [None]
+        ]
+        # Apply Godmode if enabled and not muted
+        saved_progress = load_game_progress()
+        if saved_progress.get('settings', {}).get('godmode', False) and not saved_progress.get('settings', {}).get('godmode_mute', False):
+            squares = _apply_godmode(squares)
+        return squares, list(range(1, 23)) + [[23, 30]] + list(range(24, 30)) + [37] + list(range(31, 37)) + [37] + [None]
     elif board_type == "Secret":
-        if _cached_secret_squares is not None:
-            return _cached_secret_squares, _cached_secret_next_positions
+        if _cached_secret_squares is None:
+            # Initialise seed-based random generator to ensure consistency
+            # Complies with Australian English spelling conventions
+            local_random = random.Random("secret")
             
-        # Initialise seed-based random generator to ensure consistency
-        # Complies with Australian English spelling conventions
-        local_random = random.Random("secret")
-        
-        # Create a 1000-space secret board with a winding pattern
-        secret_squares = ['Go']
-        
-        # Fill the board with 998 random spaces (ensuring a good mix of types)
-        square_types = ['0', '1', '-2', 'B', 'J', 'Q']
-        weights = [3, 3, 3, 2, 2, 2]  # Weights for more balanced distribution
-        
-        # Generate 998 spaces with weighted random distribution, avoiding problematic sequences
-        prev_two_squares = []  # Keep track of the last two squares
-        
-        for i in range(998):
-            # For the first two spaces (index 1 and 2), do not allow '-2' to avoid going back to Go
-            if i < 2:
-                valid_types = [t for t in square_types if t != '-2']
-                valid_weights = [weights[square_types.index(t)] for t in valid_types]
-                space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
-            # Prevent problematic sequences like "1, 1, -2" that could cause softlocks
-            elif len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['1', '1']:
-                # If we have "1, 1", don't allow "-2" next
-                valid_types = [t for t in square_types if t != '-2']
-                valid_weights = [weights[square_types.index(t)] for t in valid_types]
-                space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
-            elif len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['-2', '-2']:
-                # If we have "-2, -2", don't allow another "-2" to avoid excessive backtracking
-                valid_types = [t for t in square_types if t != '-2']
-                valid_weights = [weights[square_types.index(t)] for t in valid_types]
-                space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
-            else:
-                # Normal random selection
-                space_type = local_random.choices(square_types, weights=weights, k=1)[0]
+            # Create a 1000-space secret board with a winding pattern
+            secret_squares = ['Go']
             
-            # Add the selected space type
-            secret_squares.append(space_type)
+            # Fill the board with 998 random spaces (ensuring a good mix of types)
+            square_types = ['0', '1', '-2', 'B', 'J', 'Q']
+            weights = [3, 3, 3, 2, 2, 2]  # Weights for more balanced distribution
             
-            # Update the history of previous squares
-            prev_two_squares.append(space_type)
-            if len(prev_two_squares) > 2:
-                prev_two_squares.pop(0)
-        
-        # Add the finish at the end
-        secret_squares.append('F')
-        
-        # Simple sequential next positions (no branching paths)
-        secret_next_positions = list(range(1, 1000)) + [None]
-        
-        _cached_secret_squares = secret_squares
-        _cached_secret_next_positions = secret_next_positions
-        
-        return _cached_secret_squares, _cached_secret_next_positions
+            # Generate 998 spaces with weighted random distribution, avoiding problematic sequences
+            prev_two_squares = []  # Keep track of the last two squares
+            
+            for i in range(998):
+                # For the first two spaces (index 1 and 2), do not allow '-2' to avoid going back to Go
+                if i < 2:
+                    valid_types = [t for t in square_types if t != '-2']
+                    valid_weights = [weights[square_types.index(t)] for t in valid_types]
+                    space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
+                # Prevent problematic sequences like "1, 1, -2" that could cause softlocks
+                elif len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['1', '1']:
+                    # If we have "1, 1", don't allow "-2" next
+                    valid_types = [t for t in square_types if t != '-2']
+                    valid_weights = [weights[square_types.index(t)] for t in valid_types]
+                    space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
+                elif len(prev_two_squares) >= 2 and prev_two_squares[-2:] == ['-2', '-2']:
+                    # If we have "-2, -2", don't allow another "-2" to avoid excessive backtracking
+                    valid_types = [t for t in square_types if t != '-2']
+                    valid_weights = [weights[square_types.index(t)] for t in valid_types]
+                    space_type = local_random.choices(valid_types, weights=valid_weights, k=1)[0]
+                else:
+                    # Normal random selection
+                    space_type = local_random.choices(square_types, weights=weights, k=1)[0]
+                
+                # Add the selected space type
+                secret_squares.append(space_type)
+                
+                # Update the history of previous squares
+                prev_two_squares.append(space_type)
+                if len(prev_two_squares) > 2:
+                    prev_two_squares.pop(0)
+            
+            # Add the finish at the end
+            secret_squares.append('F')
+            
+            _cached_secret_squares = secret_squares
+            _cached_secret_next_positions = list(range(1, 1000)) + [None]
+            
+        squares = list(_cached_secret_squares)
+        saved_progress = load_game_progress()
+        if saved_progress.get('settings', {}).get('godmode', False) and not saved_progress.get('settings', {}).get('godmode_mute', False):
+            squares = _apply_godmode(squares)
+            
+        return squares, _cached_secret_next_positions
     else:  # Expert board
         # Properly structured expert board based on Kong.rtf
         expert_squares = []
@@ -160,6 +178,10 @@ def get_board_squares(board_type="Classic"):
         
         # Complete expert board with all paths
         complete_expert_squares = expert_squares + west_path + south_path
+        # Apply Godmode if enabled and not muted
+        saved_progress = load_game_progress()
+        if saved_progress.get('settings', {}).get('godmode', False) and not saved_progress.get('settings', {}).get('godmode_mute', False):
+            complete_expert_squares = _apply_godmode(complete_expert_squares)
         
         return complete_expert_squares, expert_next_positions
 
