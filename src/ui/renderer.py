@@ -1510,7 +1510,39 @@ def draw_board(screen, players, game_state, scale, offset_x, offset_y, font, tit
 
             current_x = die_center_x + (target_x - die_center_x) * t
             current_y = die_center_y + (target_y - die_center_y) * t
-            draw_jail_free_micro_card(screen, (current_x, current_y), scale, camera_zoom)
+
+            # Determine the big-card size (opened/showing state dimensions)
+            big_w = int(image.get_width() * camera_zoom)
+            big_h = int(image.get_height() * camera_zoom)
+
+            # Determine the micro-card target size
+            micro_image = AssetRegistry.bonus_result_images_original.get('expert_jail_free_micro')
+            micro_w = max(12, int(28 * scale * camera_zoom))
+            micro_h = max(9, int(micro_w * (micro_image.get_height() / micro_image.get_width()))) if micro_image else micro_w
+
+            # Interpolate size from big → micro
+            interp_w = max(1, int(big_w + (micro_w - big_w) * t))
+            interp_h = max(1, int(big_h + (micro_h - big_h) * t))
+
+            # Cross-dissolve: big texture fades out, micro texture fades in
+            big_alpha = max(0, int(255 * (1.0 - t)))
+            micro_alpha = max(0, int(255 * t))
+
+            cx, cy = int(current_x), int(current_y)
+
+            # Draw big texture fading out
+            if big_alpha > 0:
+                big_surf = pygame.transform.smoothscale(image, (interp_w, interp_h))
+                big_surf.set_alpha(big_alpha)
+                big_rect = big_surf.get_rect(center=(cx, cy))
+                screen.blit(big_surf, big_rect.topleft)
+
+            # Draw micro texture fading in (scaled to same interpolated size)
+            if micro_image is not None and micro_alpha > 0:
+                micro_surf = pygame.transform.smoothscale(micro_image, (interp_w, interp_h))
+                micro_surf.set_alpha(micro_alpha)
+                micro_rect = micro_surf.get_rect(center=(cx, cy))
+                screen.blit(micro_surf, micro_rect.topleft)
         elif state == 'flipping_back':
             elapsed = time.time() - game_state['bonus_flip_back_start']
             t = elapsed / 0.5
